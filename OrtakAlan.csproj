@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RootNamespace>OrtakAlan</RootNamespace>
+    <AssemblyName>OrtakAlan</AssemblyName>
+    <Version>1.0.0</Version>
+    <Product>Ortak Alan</Product>
+    <AssemblyTitle>Ortak Alan</AssemblyTitle>
+    <Description>Klasör, yazıcı, mesaj ve dosya paylaşımı</Description>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationIcon>Assets\ikon.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\logo.png" />
+    <Resource Include="Assets\ikon.jpg" />
+    <Resource Include="Assets\ikon.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="OrtakAlan" />
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+</Project>

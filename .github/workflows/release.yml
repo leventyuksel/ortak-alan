@@ -1,0 +1,23 @@
+name: Yayın
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  paket:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Paketle
+        run: dotnet publish OrtakAlan.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish
+      - name: Sıkıştır
+        shell: pwsh
+        run: Compress-Archive -Path publish/OrtakAlan.exe -DestinationPath OrtakAlan-win-x64.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: OrtakAlan-win-x64.zip

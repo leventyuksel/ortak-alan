@@ -1,0 +1,144 @@
+<v:ChromeWindow x:Class="OrtakAlan.Views.ShareWindow"
+               xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:v="clr-namespace:OrtakAlan.Views"
+               Title="Ortak Alan"
+               Width="380"
+               SizeToContent="Height"
+               MaxHeight="680"
+               ShowInTaskbar="True">
+  <Border Padding="18,16,18,14" BorderBrush="{StaticResource Line}" BorderThickness="1">
+    <StackPanel>
+      <Grid MouseLeftButtonDown="Header_MouseLeftButtonDown">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <Border Width="28" Height="28" CornerRadius="7" Background="White" VerticalAlignment="Center">
+          <Image x:Name="LogoImage" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+        <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+          <TextBlock Text="Ortak Alan" FontSize="16" FontWeight="SemiBold"/>
+          <TextBlock x:Name="LocalNameText" Foreground="{StaticResource Muted}" FontSize="12"/>
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0">
+          <Ellipse Width="8" Height="8" Fill="#16A34A" Margin="0,0,6,0"/>
+          <TextBlock Text="Çevrimiçi" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
+        </StackPanel>
+        <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE8BB;" Click="Hide_Click"/>
+      </Grid>
+
+      <Border Background="{StaticResource Wash}" CornerRadius="10" Padding="3" Margin="0,16,0,12">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+          </Grid.ColumnDefinitions>
+          <Button x:Name="TabMine" Content="Paylaştıklarım" Style="{StaticResource TabButton}" Click="TabMine_Click"/>
+          <Button x:Name="TabNet" Grid.Column="1" Content="Ağda" Style="{StaticResource TabButton}" Click="TabNet_Click"/>
+        </Grid>
+      </Border>
+
+      <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
+        <Grid>
+          <StackPanel x:Name="MinePanel">
+            <TextBlock x:Name="EmptyMine" Text="Henüz paylaşım yok." Foreground="{StaticResource Muted}" Margin="4,12" HorizontalAlignment="Center"/>
+            <ItemsControl x:Name="MineList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid Margin="0,6" ToolTip="{Binding Tip}">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto"/>
+                      <ColumnDefinition Width="*"/>
+                      <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,2,10,0" VerticalAlignment="Top"/>
+                    <StackPanel Grid.Column="1">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
+                      <TextBlock Text="{Binding Line}" Foreground="{StaticResource Muted}" FontSize="12"/>
+                      <TextBlock Text="{Binding Warning}" TextWrapping="Wrap">
+                        <TextBlock.Style>
+                          <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource Danger}"/>
+                            <Setter Property="FontSize" Value="12"/>
+                            <Style.Triggers>
+                              <Trigger Property="Text" Value="">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                              </Trigger>
+                            </Style.Triggers>
+                          </Style>
+                        </TextBlock.Style>
+                      </TextBlock>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                      <Border Background="{StaticResource Wash}" CornerRadius="10" Padding="8,3" Margin="0,0,4,0" VerticalAlignment="Center">
+                        <TextBlock Text="Paylaşımda" FontSize="11" Foreground="{StaticResource Muted}"/>
+                      </Border>
+                      <Button Content="Aç" Style="{StaticResource GhostButton}" Padding="6,4" MinHeight="28" Click="OpenLocal_Click"/>
+                      <Button Content="Kaldır" Style="{StaticResource GhostButton}" Padding="6,4" MinHeight="28" Click="Remove_Click"/>
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <StackPanel x:Name="NetPanel" Visibility="Collapsed">
+            <TextBlock x:Name="EmptyNet" Text="Ağda başka bilgisayar görünmüyor." Foreground="{StaticResource Muted}" Margin="4,12" TextWrapping="Wrap" TextAlignment="Center"/>
+            <ItemsControl x:Name="NetList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Margin="0,8,0,10">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <Ellipse Width="8" Height="8" Fill="{Binding Dot}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                      <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
+                        <TextBlock Text="{Binding Status}" Foreground="{StaticResource Muted}" FontSize="12"/>
+                      </StackPanel>
+                      <Button Grid.Column="2" Content="Mesaj" Style="{StaticResource GhostButton}" Click="Message_Click"/>
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Shares}" Margin="16,4,0,0">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Button Style="{StaticResource RowButton}" Click="RemoteShare_Click" HorizontalContentAlignment="Left">
+                            <StackPanel Orientation="Horizontal">
+                              <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                              <TextBlock Text="{Binding KindLabel}" Width="58" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                              <TextBlock Text="{Binding Name}" VerticalAlignment="Center" Foreground="{DynamicResource Ink}"/>
+                            </StackPanel>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Grid>
+      </ScrollViewer>
+
+      <StackPanel x:Name="ShareActions" Margin="0,12,0,0">
+        <Button Content="Klasör paylaş" Style="{StaticResource SecondaryButton}" Margin="0,0,0,8" Click="Folder_Click" AutomationProperties.AutomationId="ShareFolder"/>
+        <Button Content="Yazıcı paylaş" Style="{StaticResource SecondaryButton}" Click="Printer_Click" AutomationProperties.AutomationId="SharePrinter"/>
+      </StackPanel>
+
+      <Grid Margin="0,8,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition/>
+          <ColumnDefinition/>
+        </Grid.ColumnDefinitions>
+        <Button Content="Mesajlar" Style="{StaticResource GhostButton}" Click="Chat_Click"/>
+        <Button Grid.Column="1" Content="Görünüm" Style="{StaticResource GhostButton}" Click="Theme_Click"/>
+      </Grid>
+      <TextBlock x:Name="StatusText" Foreground="{StaticResource Muted}" FontSize="12" Margin="2,8,2,0" TextWrapping="Wrap"/>
+    </StackPanel>
+  </Border>
+</v:ChromeWindow>
