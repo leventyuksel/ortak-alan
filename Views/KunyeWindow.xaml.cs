@@ -38,19 +38,53 @@ public partial class KunyeWindow : ChromeWindow
             return;
         }
 
+        if (UpdateService.Applying)
+        {
+            UpdateButton.IsEnabled = false;
+            UpdateCaption.Text = "İndiriliyor…";
+            Note("");
+            return;
+        }
+
         var offer = UpdateService.Pending;
-        UpdateButton.Visibility = offer == null ? Visibility.Collapsed : Visibility.Visible;
-        UpdateButton.IsEnabled = offer != null && !UpdateService.Applying;
-        if (offer == null) return;
-        UpdateCaption.Text = offer.Version.ToString(3);
-        UpdateButton.ToolTip = "Sürüm " + offer.Version.ToString(3) + " — kurmak için tıklayın";
+        UpdateButton.IsEnabled = true;
+        if (offer != null)
+        {
+            UpdateCaption.Text = "Sürüm " + offer.Version.ToString(3) + " kur";
+            UpdateButton.ToolTip = "Kurulumu başlat";
+            Note("");
+            return;
+        }
+
+        UpdateCaption.Text = "Güncellemeleri kontrol et";
+        UpdateButton.ToolTip = "GitHub sürümüne bak";
+        if (UpdateService.LastCheckFailed) Note("Kontrol edilemedi. Yeniden deneyin.");
+        else if (UpdateService.Checked) Note("Bu sürüm güncel.");
+        else Note("");
+    }
+
+    void Note(string text)
+    {
+        UpdateNote.Text = text;
+        UpdateNote.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
     async void Update_Click(object sender, RoutedEventArgs e)
     {
-        if (UpdateService.Pending == null || UpdateService.Applying) return;
+        if (UpdateService.Applying) return;
+        if (UpdateService.Pending == null)
+        {
+            UpdateButton.IsEnabled = false;
+            UpdateCaption.Text = "Kontrol ediliyor…";
+            Note("");
+            await UpdateService.LookAsync();
+            ShowUpdate();
+            return;
+        }
+
         UpdateButton.IsEnabled = false;
         UpdateCaption.Text = "İndiriliyor…";
+        Note("");
         var error = await UpdateService.ApplyPendingAsync();
         if (error == null)
         {
@@ -65,7 +99,8 @@ public partial class KunyeWindow : ChromeWindow
         }
 
         UpdateButton.IsEnabled = true;
-        UpdateCaption.Text = error;
+        UpdateCaption.Text = "Sürüm " + UpdateService.Pending?.Version.ToString(3) + " kur";
+        Note(error);
     }
 
     void Phone_Click(object sender, RoutedEventArgs e)

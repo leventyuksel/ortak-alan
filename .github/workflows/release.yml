@@ -21,6 +21,21 @@ jobs:
       - name: Sıkıştır
         shell: pwsh
         run: Compress-Archive -Path publish/OrtakAlan.exe -DestinationPath OrtakAlan-win-x64.zip
+      - name: Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Kurulum
+        shell: pwsh
+        run: |
+          $iscc = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe","$env:ProgramFiles\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $iscc) { throw "ISCC bulunamadı" }
+          [xml]$proj = Get-Content -Raw -Path OrtakAlan.csproj
+          $ver = @($proj.Project.PropertyGroup.Version) | Where-Object { $_ } | Select-Object -First 1
+          & $iscc "/DMyAppVersion=$ver" "installer\OrtakAlan.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: softprops/action-gh-release@v2
         with:
-          files: OrtakAlan-win-x64.zip
+          body: |
+            Kurulum için OrtakAlan-Setup.exe dosyasını çalıştırın.
+          files: |
+            dist/OrtakAlan-Setup.exe
+            OrtakAlan-win-x64.zip

@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace OrtakAlan;
 
-sealed record UpdateOffer(Version Version, string Name, string Url);
+sealed record UpdateOffer(Version Version, string Name, string Url, bool Setup);
 
 static class UpdateService
 {
@@ -22,39 +22,39 @@ static class UpdateService
 
     public static async Task<UpdateOffer?> CheckAsync()
     {
-        try
-        {
-            var address = "https://api.github.com/repos/" + AppInfo.Owner + "/" + AppInfo.Repo + "/releases/latest";
-            using var response = await Http.GetAsync(address);
-            if (!response.IsSuccessStatusCode) return null;
-            await using var stream = await response.Content.ReadAsStreamAsync();
-            using var doc = await JsonDocument.ParseAsync(stream);
-            var root = doc.RootElement;
-            var tag = root.GetProperty("tag_name").GetString() ?? "";
-            if (!Version.TryParse(tag.TrimStart('v', 'V'), out var version)) return null;
-            if (version <= AppInfo.Current) return null;
+        var address = "https://api.github.com/repos/" + AppInfo.Owner + "/" + AppInfo.Repo + "/releases/latest";
+        using var response = await Http.GetAsync(address);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException("Sürüm listesi alınamadı.");
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        using var doc = await JsonDocument.ParseAsync(stream);
+        var root = doc.RootElement;
+        var tag = root.GetProperty("tag_name").GetString() ?? "";
+        if (!Version.TryParse(tag.TrimStart('v', 'V'), out var version))
+            throw new InvalidOperationException("Sürüm numarası okunamadı.");
+        if (version <= AppInfo.Current) return null;
 
-            string? url = null;
-            if (root.TryGetProperty("assets", out var assets))
+        string? setup = null;
+        string? zip = null;
+        if (root.TryGetProperty("assets", out var assets))
+        {
+            foreach (var asset in assets.EnumerateArray())
             {
-                foreach (var asset in assets.EnumerateArray())
-                {
-                    var name = asset.GetProperty("name").GetString() ?? "";
-                    if (!name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) continue;
-                    url = asset.GetProperty("browser_download_url").GetString();
-                    break;
-                }
+                var name = asset.GetProperty("name").GetString() ?? "";
+                var url = asset.GetProperty("browser_download_url").GetString();
+                if (string.IsNullOrWhiteSpace(url)) continue;
+                if (name.Contains("Setup", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    setup = url;
+                else if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    zip ??= url;
             }
+        }
 
-            if (string.IsNullOrWhiteSpace(url)) return null;
-            var title = root.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : tag;
-            return new UpdateOffer(version, title ?? tag, url);
-        }
-        catch (Exception ex)
-        {
-            Log.Write(ex);
-            return null;
-        }
+        var chosen = setup ?? zip;
+        if (string.IsNullOrWhiteSpace(chosen))
+            throw new InvalidOperationException("Kurulum paketi yok.");
+        var title = root.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : tag;
+        return new UpdateOffer(version, title ?? tag, chosen, setup != null);
     }
 
     public static async Task ApplyAsync(UpdateOffer offer)
@@ -63,25 +63,38 @@ static class UpdateService
         if (Directory.Exists(root)) Directory.Delete(root, true);
         Directory.CreateDirectory(root);
 
-        var zipPath = Path.Combine(root, "paket.zip");
+        var packagePath = Path.Combine(root, offer.Setup ? "OrtakAlan-Setup.exe" : "paket.zip");
         using (var download = await Http.GetStreamAsync(offer.Url))
-        using (var file = File.Create(zipPath))
+        using (var file = File.Create(packagePath))
             await download.CopyToAsync(file);
 
-        var extract = Path.Combine(root, "dosyalar");
-        ZipFile.ExtractToDirectory(zipPath, extract);
-        var source = Directory.GetFiles(extract, "OrtakAlan.exe", SearchOption.AllDirectories).FirstOrDefault();
-        if (source == null) throw new InvalidOperationException("Paket içinde OrtakAlan.exe yok.");
-        var sourceDir = Path.GetDirectoryName(source)!;
+        string scriptText;
+        if (offer.Setup)
+        {
+            scriptText =
+                "$ErrorActionPreference = 'Stop'\r\n" +
+                "Wait-Process -Id " + Environment.ProcessId + " -ErrorAction SilentlyContinue\r\n" +
+                "Start-Sleep -Milliseconds 600\r\n" +
+                "Start-Process -FilePath '" + packagePath.Replace("'", "''") + "' -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait\r\n" +
+                "Start-Process -FilePath '" + AppInfo.InstalledExe.Replace("'", "''") + "'\r\n";
+        }
+        else
+        {
+            var extract = Path.Combine(root, "dosyalar");
+            ZipFile.ExtractToDirectory(packagePath, extract);
+            var source = Directory.GetFiles(extract, "OrtakAlan.exe", SearchOption.AllDirectories).FirstOrDefault();
+            if (source == null) throw new InvalidOperationException("Paket içinde OrtakAlan.exe yok.");
+            var sourceDir = Path.GetDirectoryName(source)!;
+            Directory.CreateDirectory(AppInfo.InstallDir);
+            scriptText =
+                "$ErrorActionPreference = 'Stop'\r\n" +
+                "Wait-Process -Id " + Environment.ProcessId + " -ErrorAction SilentlyContinue\r\n" +
+                "Start-Sleep -Milliseconds 500\r\n" +
+                "Copy-Item -LiteralPath '" + sourceDir.Replace("'", "''") + "\\*' -Destination '" + AppInfo.InstallDir.Replace("'", "''") + "' -Recurse -Force\r\n" +
+                "Start-Process -FilePath '" + AppInfo.InstalledExe.Replace("'", "''") + "'\r\n";
+        }
 
-        Directory.CreateDirectory(AppInfo.InstallDir);
         var script = Path.Combine(root, "uygula.ps1");
-        var scriptText =
-            "$ErrorActionPreference = 'Stop'\r\n" +
-            "Wait-Process -Id " + Environment.ProcessId + " -ErrorAction SilentlyContinue\r\n" +
-            "Start-Sleep -Milliseconds 500\r\n" +
-            "Copy-Item -LiteralPath '" + sourceDir.Replace("'", "''") + "\\*' -Destination '" + AppInfo.InstallDir.Replace("'", "''") + "' -Recurse -Force\r\n" +
-            "Start-Process -FilePath '" + AppInfo.InstalledExe.Replace("'", "''") + "'\r\n";
         File.WriteAllText(script, scriptText, new System.Text.UTF8Encoding(true));
 
         Process.Start(new ProcessStartInfo
@@ -95,13 +108,34 @@ static class UpdateService
 
     static int _apply;
 
+    static readonly SemaphoreSlim CheckGate = new(1, 1);
+
     public static bool Applying => Volatile.Read(ref _apply) == 1;
+    public static bool Checked { get; private set; }
+    public static bool LastCheckFailed { get; private set; }
     public static UpdateOffer? Pending { get; private set; }
     public static event Action? PendingChanged;
 
     public static async Task LookAsync()
     {
-        Pending = await CheckAsync();
+        await CheckGate.WaitAsync();
+        try
+        {
+            Pending = await CheckAsync();
+            LastCheckFailed = false;
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            Pending = null;
+            LastCheckFailed = true;
+        }
+        finally
+        {
+            Checked = true;
+            CheckGate.Release();
+        }
+
         var handler = PendingChanged;
         if (handler == null) return;
         foreach (var item in handler.GetInvocationList())
