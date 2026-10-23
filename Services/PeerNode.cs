@@ -49,6 +49,7 @@ public sealed class PeerNode : IDisposable
         Directory.CreateDirectory(_beaconDir);
         StartTcp();
         StartUdp();
+        TailscalePeers.Start(_cts.Token);
         _ = Task.Run(BeaconLoop);
         _ = Task.Run(SweepLoop);
     }
@@ -274,7 +275,7 @@ public sealed class PeerNode : IDisposable
     {
         var client = new TcpClient { NoDelay = true };
         using var connect = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
-        connect.CancelAfter(TimeSpan.FromSeconds(5));
+        connect.CancelAfter(TailscalePeers.IsAddress(peer.Ip) ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(5));
         await client.ConnectAsync(peer.Ip, peer.Port, connect.Token);
         var link = new Link(client, peer.Id, peer.Name);
         await link.Send(Obj(("t", "intro"), ("id", _settings.ComputerId), ("name", _settings.ComputerName)));
@@ -1039,6 +1040,8 @@ public sealed class PeerNode : IDisposable
             ["utc"] = DateTime.UtcNow.ToString("o"),
             ["shares"] = shares
         };
+        if (TailscalePeers.Self is { } tailscale)
+            obj["ts"] = tailscale.ToString();
         var json = obj.ToJsonString();
         var path = BeaconPath();
         var temp = path + ".tmp";
@@ -1088,6 +1091,8 @@ public sealed class PeerNode : IDisposable
         Send(new IPEndPoint(IPAddress.Loopback, DiscoveryPort));
         foreach (var address in SubnetBroadcasts())
             Send(new IPEndPoint(address, DiscoveryPort));
+        foreach (var address in TailscalePeers.Current)
+            Send(new IPEndPoint(address, DiscoveryPort));
     }
 
     static IEnumerable<IPAddress> SubnetBroadcasts()
@@ -1123,6 +1128,9 @@ public sealed class PeerNode : IDisposable
         if (id.Length == 0 || id == _settings.ComputerId) return;
         var name = Str(root, "name");
         var port = root.TryGetProperty("port", out var portEl) && portEl.TryGetInt32(out var portNo) ? portNo : 0;
+        IPAddress? announced = null;
+        if (IPAddress.TryParse(Str(root, "ts"), out var tailscale) && TailscalePeers.IsAddress(tailscale))
+            announced = tailscale;
         var shares = new List<RemoteShare>();
         if (root.TryGetProperty("shares", out var array) && array.ValueKind == JsonValueKind.Array)
         {
@@ -1151,11 +1159,30 @@ public sealed class PeerNode : IDisposable
             }
             if (name.Length > 0) peer.Name = name;
             if (port > 0) peer.Port = port;
-            if (lan || IPAddress.IsLoopback(peer.Ip)) peer.Ip = ip;
+            RememberAddress(peer, ip, lan, announced);
             peer.Shares = shares;
             peer.SeenUtc = DateTime.UtcNow;
         }
         Publish();
+    }
+
+    static void RememberAddress(PeerState peer, IPAddress source, bool lan, IPAddress? announced)
+    {
+        if (!lan)
+        {
+            if (IPAddress.IsLoopback(peer.Ip)) peer.Ip = source;
+            return;
+        }
+        var now = DateTime.UtcNow;
+        if (!TailscalePeers.IsAddress(source))
+        {
+            peer.Ip = source;
+            peer.LanSeenUtc = now;
+            return;
+        }
+        peer.TailIp = announced ?? source;
+        if (now - peer.LanSeenUtc > TimeSpan.FromSeconds(6))
+            peer.Ip = peer.TailIp;
     }
 
     void Publish()
@@ -1244,7 +1271,9 @@ public sealed class PeerNode : IDisposable
         public string Name = "";
         public int Port;
         public IPAddress Ip = IPAddress.Loopback;
+        public IPAddress TailIp = IPAddress.Loopback;
         public DateTime SeenUtc;
+        public DateTime LanSeenUtc;
         public List<RemoteShare> Shares = new();
         public bool IsOnline => DateTime.UtcNow - SeenUtc < TimeSpan.FromSeconds(7);
     }

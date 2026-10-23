@@ -14,7 +14,7 @@ static class ShareConnect
         App.Me.ShowFiles(peer.Id, peer.Name, share.Id, share.Name);
         return label.Length == 0
             ? peer.Name + " / " + share.Name
-            : "Masaüstüne \"" + label + "\" kısayolu kondu.";
+            : "\"" + label + "\" Paylaşılan Dosyalar içine eklendi.";
     }
 
     public static async Task<string> ConnectPrinter(PeerVm peer, RemoteShareVm share)

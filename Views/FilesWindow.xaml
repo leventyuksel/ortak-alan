@@ -3,85 +3,295 @@
                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                xmlns:v="clr-namespace:OrtakAlan.Views"
                Title="Paylaşılan Dosyalar"
-               Width="980"
-               Height="640"
-               MinWidth="760"
-               MinHeight="460"
+               Width="1100"
+               Height="700"
+               MinWidth="860"
+               MinHeight="480"
                WindowStartupLocation="CenterScreen"
+               FontFamily="Segoe UI"
                AllowDrop="True"
                Drop="Window_Drop"
                DragOver="Window_DragOver"
                PreviewKeyDown="Window_PreviewKeyDown">
-  <DockPanel Background="{DynamicResource Paper}">
-    <Border DockPanel.Dock="Top" Padding="12,10,12,8" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
-      <StackPanel>
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-          </Grid.ColumnDefinitions>
-          <Border Width="28" Height="28" CornerRadius="7" Background="White" VerticalAlignment="Center">
-            <Image x:Name="LogoImage" Width="18" Height="18"/>
-          </Border>
-          <TextBlock Grid.Column="1" Text="Paylaşılan Dosyalar" Margin="10,0,0,0" VerticalAlignment="Center" FontSize="16" FontWeight="SemiBold"/>
-        </Grid>
-        <StackPanel x:Name="Toolbar" Orientation="Horizontal" Margin="0,10,0,8">
-          <Button x:Name="BackButton" Style="{StaticResource GhostButton}" Padding="8,4" MinHeight="32" ToolTip="Geri" Click="Back_Click" Content="&#xE72B;" FontFamily="Segoe MDL2 Assets"/>
-          <Button x:Name="UpButton" Style="{StaticResource GhostButton}" Padding="8,4" MinHeight="32" Margin="2,0,0,0" ToolTip="Yukarı" Click="Up_Click" Content="&#xE74A;" FontFamily="Segoe MDL2 Assets"/>
-          <Button Style="{StaticResource GhostButton}" Padding="8,4" MinHeight="32" Margin="8,0,0,0" ToolTip="Kes" Click="Cut_Click" Content="&#xE8C6;" FontFamily="Segoe MDL2 Assets"/>
-          <Button Style="{StaticResource GhostButton}" Padding="8,4" MinHeight="32" ToolTip="Kopyala" Click="Copy_Click" Content="&#xE8C8;" FontFamily="Segoe MDL2 Assets"/>
-          <Button Style="{StaticResource GhostButton}" Padding="8,4" MinHeight="32" ToolTip="Yapıştır" Click="Paste_Click" Content="&#xE77F;" FontFamily="Segoe MDL2 Assets"/>
-          <Button Style="{StaticResource GhostButton}" Padding="8,4" MinHeight="32" Margin="8,0,0,0" ToolTip="Yeni klasör" Click="New_Click" Content="&#xE8F4;" FontFamily="Segoe MDL2 Assets"/>
-          <Button Style="{StaticResource GhostButton}" Padding="8,4" MinHeight="32" ToolTip="Yeniden adlandır" Click="Rename_Click" Content="&#xE8AC;" FontFamily="Segoe MDL2 Assets"/>
-          <Button Style="{StaticResource GhostButton}" Padding="8,4" MinHeight="32" ToolTip="Sil" Click="Delete_Click" Content="&#xE74D;" FontFamily="Segoe MDL2 Assets"/>
-          <Button Style="{StaticResource GhostButton}" Padding="8,4" MinHeight="32" Margin="8,0,0,0" ToolTip="Yenile" Click="Refresh_Click" Content="&#xE72C;" FontFamily="Segoe MDL2 Assets"/>
+  <v:ChromeWindow.Resources>
+    <SolidColorBrush x:Key="ExBg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ExFg" Color="#1A1A1A"/>
+    <SolidColorBrush x:Key="ExMuted" Color="#5C5C5C"/>
+    <SolidColorBrush x:Key="ExAddress" Color="#F3F3F3"/>
+    <SolidColorBrush x:Key="ExHover" Color="#F5F5F5"/>
+    <SolidColorBrush x:Key="ExSelect" Color="#CCE4F7"/>
+    <SolidColorBrush x:Key="ExLine" Color="#E5E5E5"/>
+    <Style x:Key="Cmd" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource ExFg}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Padding" Value="10,4"/>
+      <Setter Property="MinHeight" Value="32"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="bd" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
+              <ContentPresenter VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource ExHover}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.35"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="CrumbButton" TargetType="Button" BasedOn="{StaticResource Cmd}">
+      <Setter Property="Padding" Value="4,2"/>
+      <Setter Property="MinHeight" Value="24"/>
+    </Style>
+    <Style TargetType="GridViewColumnHeader">
+      <Setter Property="Background" Value="{DynamicResource ExBg}"/>
+      <Setter Property="Foreground" Value="{DynamicResource ExFg}"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Padding" Value="8,6"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="GridViewColumnHeader">
+            <Border Background="{DynamicResource ExBg}" BorderBrush="{DynamicResource ExLine}" BorderThickness="0,0,1,1" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="ListViewItem">
+      <Setter Property="Foreground" Value="{DynamicResource ExFg}"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Padding" Value="4,3"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListViewItem">
+            <Border x:Name="bd" Background="Transparent" Padding="{TemplateBinding Padding}">
+              <GridViewRowPresenter VerticalAlignment="Center"
+                                    Content="{TemplateBinding Content}"
+                                    Columns="{Binding View.Columns, RelativeSource={RelativeSource AncestorType=ListView}}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource ExHover}"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource ExSelect}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="ListBoxItem">
+      <Setter Property="Foreground" Value="{DynamicResource ExFg}"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Padding" Value="4"/>
+      <Setter Property="Margin" Value="2"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="bd" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource ExHover}"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource ExSelect}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </v:ChromeWindow.Resources>
+  <DockPanel Background="{DynamicResource ExBg}">
+    <Border DockPanel.Dock="Top" Padding="8,8,8,0">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="220"/>
+        </Grid.ColumnDefinitions>
+        <StackPanel Orientation="Horizontal">
+          <Button x:Name="BackButton" Style="{StaticResource Cmd}" ToolTip="Geri" Click="Back_Click" FontFamily="Segoe MDL2 Assets" FontSize="14" Content="&#xE72B;" Padding="8,4"/>
+          <Button x:Name="ForwardButton" Style="{StaticResource Cmd}" ToolTip="İleri" Click="Forward_Click" FontFamily="Segoe MDL2 Assets" FontSize="14" Content="&#xE72A;" Padding="8,4"/>
+          <Button x:Name="UpButton" Style="{StaticResource Cmd}" ToolTip="Yukarı" Click="Up_Click" FontFamily="Segoe MDL2 Assets" FontSize="14" Content="&#xE74A;" Padding="8,4"/>
+          <Button Style="{StaticResource Cmd}" ToolTip="Yenile" Click="Refresh_Click" FontFamily="Segoe MDL2 Assets" FontSize="14" Content="&#xE72C;" Padding="8,4"/>
         </StackPanel>
-        <Border Background="{DynamicResource Wash}" CornerRadius="8" Padding="8,4">
-          <ItemsControl x:Name="Crumbs">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <StackPanel Orientation="Horizontal"/>
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <StackPanel Orientation="Horizontal">
-                  <TextBlock Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="10" Margin="4,0" VerticalAlignment="Center" Foreground="{DynamicResource Muted}" Visibility="{Binding ShowSep, Converter={StaticResource BoolVis}}"/>
-                  <Button Content="{Binding Title}" Style="{StaticResource GhostButton}" Padding="6,2" MinHeight="28" Click="Crumb_Click"/>
-                </StackPanel>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
+        <Border Grid.Column="1" Margin="8,0" Background="{DynamicResource ExAddress}" CornerRadius="4" Padding="8,2" MinHeight="32">
+          <DockPanel>
+            <Border DockPanel.Dock="Left" Width="18" Height="18" Margin="0,0,6,0" VerticalAlignment="Center">
+              <Image x:Name="LogoImage" Width="16" Height="16"/>
+            </Border>
+            <ItemsControl x:Name="Crumbs" VerticalAlignment="Center">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="10" Margin="2,0" VerticalAlignment="Center" Foreground="{DynamicResource ExMuted}" Visibility="{Binding ShowSep, Converter={StaticResource BoolVis}}"/>
+                    <Button Content="{Binding Title}" Style="{StaticResource CrumbButton}" Click="Crumb_Click"/>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </DockPanel>
         </Border>
-      </StackPanel>
+        <Border Grid.Column="2" Background="{DynamicResource ExAddress}" CornerRadius="4" MinHeight="32">
+          <Grid>
+            <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource ExFg}"
+                     CaretBrush="{DynamicResource ExFg}" Padding="10,4" VerticalContentAlignment="Center" TextChanged="Search_Changed"/>
+            <TextBlock x:Name="SearchHint" Text="Ara" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource ExMuted}" IsHitTestVisible="False"/>
+          </Grid>
+        </Border>
+      </Grid>
     </Border>
-    <Border DockPanel.Dock="Bottom" Padding="14,8" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
-      <TextBlock x:Name="StatusText" Foreground="{DynamicResource Muted}" FontSize="12"/>
+    <Border DockPanel.Dock="Top" Padding="4,4,8,4" BorderBrush="{DynamicResource ExLine}" BorderThickness="0,0,0,1">
+      <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+        <StackPanel x:Name="Toolbar" Orientation="Horizontal">
+          <Button Style="{StaticResource Cmd}" Click="Yeni_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE710;" FontSize="14" VerticalAlignment="Center"/>
+              <TextBlock Text="Yeni" Margin="8,0,4,0" VerticalAlignment="Center"/>
+              <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE70D;" FontSize="10" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource Cmd}" Click="Cut_Click" ToolTip="Kes">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8C6;" FontSize="14" VerticalAlignment="Center"/>
+              <TextBlock Text="Kes" Margin="8,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource Cmd}" Click="Copy_Click" ToolTip="Kopyala">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8C8;" FontSize="14" VerticalAlignment="Center"/>
+              <TextBlock Text="Kopyala" Margin="8,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource Cmd}" Click="Paste_Click" ToolTip="Yapıştır">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE77F;" FontSize="14" VerticalAlignment="Center"/>
+              <TextBlock Text="Yapıştır" Margin="8,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource Cmd}" Click="Rename_Click" ToolTip="Yeniden adlandır">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8AC;" FontSize="14" VerticalAlignment="Center"/>
+              <TextBlock Text="Yeniden adlandır" Margin="8,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource Cmd}" Click="Delete_Click" ToolTip="Sil">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE74D;" FontSize="14" VerticalAlignment="Center"/>
+              <TextBlock Text="Sil" Margin="8,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource Cmd}" Click="Sort_Click" Margin="12,0,0,0">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8CB;" FontSize="14" VerticalAlignment="Center"/>
+              <TextBlock Text="Sırala" Margin="8,0,4,0" VerticalAlignment="Center"/>
+              <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE70D;" FontSize="10" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource Cmd}" Click="View_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE890;" FontSize="14" VerticalAlignment="Center"/>
+              <TextBlock Text="Görünüm" Margin="8,0,4,0" VerticalAlignment="Center"/>
+              <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE70D;" FontSize="10" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </ScrollViewer>
     </Border>
-    <ListView x:Name="Rows" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource Ink}"
-              SelectionMode="Extended" MouseDoubleClick="Rows_MouseDoubleClick"
-              PreviewMouseRightButtonDown="Rows_PreviewMouseRightButtonDown"
-              PreviewMouseLeftButtonDown="Rows_PreviewMouseLeftButtonDown"
-              PreviewMouseLeftButtonUp="Rows_PreviewMouseLeftButtonUp"
-              PreviewMouseMove="Rows_PreviewMouseMove"
-              SelectionChanged="Rows_SelectionChanged">
-      <ListView.View>
-        <GridView>
-          <GridViewColumn Header="Ad" Width="420">
-            <GridViewColumn.CellTemplate>
-              <DataTemplate>
-                <StackPanel Orientation="Horizontal" Margin="2,3">
-                  <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" Width="24" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"/>
-                  <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
-                </StackPanel>
-              </DataTemplate>
-            </GridViewColumn.CellTemplate>
-          </GridViewColumn>
-          <GridViewColumn Header="Değiştirme" Width="150" DisplayMemberBinding="{Binding WhenText}"/>
-          <GridViewColumn Header="Tür" Width="150" DisplayMemberBinding="{Binding TypeText}"/>
-          <GridViewColumn Header="Boyut" Width="90" DisplayMemberBinding="{Binding SizeText}"/>
-        </GridView>
-      </ListView.View>
-    </ListView>
+    <Border DockPanel.Dock="Bottom" Padding="14,6" BorderBrush="{DynamicResource ExLine}" BorderThickness="0,1,0,0">
+      <TextBlock x:Name="StatusText" Foreground="{DynamicResource ExMuted}" FontSize="12"/>
+    </Border>
+    <Border DockPanel.Dock="Left" Width="228" BorderBrush="{DynamicResource ExLine}" BorderThickness="0,0,1,0" Padding="8,8,4,8">
+      <ListBox x:Name="Nav" BorderThickness="0" Background="Transparent"
+               SelectionChanged="Nav_SelectionChanged"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Orientation="Horizontal" Margin="2,1">
+              <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+    <Grid>
+      <ListBox x:Name="Icons" BorderThickness="0" Background="Transparent" SelectionMode="Extended"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+               MouseDoubleClick="Rows_MouseDoubleClick"
+               PreviewMouseRightButtonDown="Rows_PreviewMouseRightButtonDown"
+               PreviewMouseLeftButtonDown="Rows_PreviewMouseLeftButtonDown"
+               PreviewMouseLeftButtonUp="Rows_PreviewMouseLeftButtonUp"
+               PreviewMouseMove="Rows_PreviewMouseMove"
+               SelectionChanged="Rows_SelectionChanged">
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel/>
+          </ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Width="92">
+              <Image Source="{Binding Icon}" Width="48" Height="48" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+              <TextBlock Text="{Binding Name}" TextAlignment="Center" TextWrapping="Wrap" MaxHeight="34" Margin="2,6,2,2"
+                         HorizontalAlignment="Center"/>
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+      <ListView x:Name="Rows" Visibility="Collapsed" BorderThickness="0" Background="Transparent"
+                Foreground="{DynamicResource ExFg}"
+                SelectionMode="Extended" MouseDoubleClick="Rows_MouseDoubleClick"
+                PreviewMouseRightButtonDown="Rows_PreviewMouseRightButtonDown"
+                PreviewMouseLeftButtonDown="Rows_PreviewMouseLeftButtonDown"
+                PreviewMouseLeftButtonUp="Rows_PreviewMouseLeftButtonUp"
+                PreviewMouseMove="Rows_PreviewMouseMove"
+                SizeChanged="Rows_SizeChanged"
+                SelectionChanged="Rows_SelectionChanged">
+        <ListView.View>
+          <GridView>
+            <GridViewColumn x:Name="NameColumn" Header="Ad" Width="420">
+              <GridViewColumn.CellTemplate>
+                <DataTemplate>
+                  <StackPanel Orientation="Horizontal" Margin="2,1">
+                    <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                  </StackPanel>
+                </DataTemplate>
+              </GridViewColumn.CellTemplate>
+            </GridViewColumn>
+            <GridViewColumn Header="Değiştirme" Width="150" DisplayMemberBinding="{Binding WhenText}"/>
+            <GridViewColumn Header="Tür" Width="160" DisplayMemberBinding="{Binding TypeText}"/>
+            <GridViewColumn Header="Boyut" Width="90" DisplayMemberBinding="{Binding SizeText}"/>
+          </GridView>
+        </ListView.View>
+      </ListView>
+    </Grid>
   </DockPanel>
 </v:ChromeWindow>

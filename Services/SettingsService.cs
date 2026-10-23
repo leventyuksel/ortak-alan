@@ -41,6 +41,7 @@ public sealed class SettingsService
                 model.Approved ??= new();
                 model.Rejected ??= new();
                 model.Shares ??= new();
+                model.FolderColors ??= new();
                 if (string.IsNullOrWhiteSpace(model.ComputerId))
                     model.ComputerId = Guid.NewGuid().ToString("N");
                 if (string.IsNullOrWhiteSpace(model.Theme))

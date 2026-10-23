@@ -21,7 +21,9 @@ static class AppInfo
 
     public static string PreferredExe()
     {
+        var current = Environment.ProcessPath;
+        if (!string.IsNullOrWhiteSpace(current) && File.Exists(current)) return current;
         if (File.Exists(InstalledExe)) return InstalledExe;
-        return Environment.ProcessPath ?? InstalledExe;
+        return current ?? InstalledExe;
     }
 }

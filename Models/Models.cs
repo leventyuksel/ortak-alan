@@ -49,6 +49,7 @@ public sealed class SettingsModel
     public List<KnownPeer> Approved { get; set; } = new();
     public List<KnownPeer> Rejected { get; set; } = new();
     public List<ShareItem> Shares { get; set; } = new();
+    public Dictionary<string, string> FolderColors { get; set; } = new();
 }
 
 public sealed class ChatLine : Observable
@@ -120,7 +121,7 @@ public sealed class PeerVm : Observable
         }
     }
 
-    public string Status => Online ? "Çevrimiçi" : "Çevrimdışı";
+    public string Status => !Online ? "Çevrimdışı" : TailscalePeers.IsAddress(Ip) ? "Çevrimiçi · Tailscale" : "Çevrimiçi";
     public Brush Dot => Online ? OnlineBrush : OfflineBrush;
     public string Ip { get; private set; } = "127.0.0.1";
     public int Port { get; private set; }
@@ -146,9 +147,10 @@ public sealed class PeerVm : Observable
     public void Apply(PeerSnapshot snapshot)
     {
         Name = snapshot.Name;
-        Online = snapshot.Online;
         Ip = snapshot.Ip.ToString();
         Port = snapshot.Port;
+        Online = snapshot.Online;
+        Raise(nameof(Status));
         var sig = string.Join("|", snapshot.Shares.Select(s => $"{s.Id}:{s.Kind}:{s.Name}:{s.WindowsShare}"));
         if (sig == _sig) return;
         Shares.Clear();
