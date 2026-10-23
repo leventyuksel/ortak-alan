@@ -8,6 +8,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace OrtakAlan.Views;
 
@@ -18,17 +19,17 @@ public partial class ChatWindow : ChromeWindow
     readonly ListCollectionView _people;
     bool _busy;
     bool _holdSelection;
+    Storyboard? _blink;
     public string? SelectedId { get; private set; }
 
     public ChatWindow()
     {
         InitializeComponent();
-        UseLogo(LogoImage);
+        UseLogo(LogoImage, openKunye: false);
         WindowStyle = WindowStyle.SingleBorderWindow;
         ResizeMode = ResizeMode.CanResize;
         DockRight();
         SelfName.Text = App.Me.Settings.ComputerName;
-        VersionText.Text = AppInfo.Display;
         UpdateService.PendingChanged += ShowUpdateIcon;
         Closed += (_, _) => UpdateService.PendingChanged -= ShowUpdateIcon;
         ShowUpdateIcon();
@@ -267,6 +268,8 @@ public partial class ChatWindow : ChromeWindow
 
     void Settings_Click(object sender, RoutedEventArgs e) => App.Me.ShowSettings();
 
+    void Kunye_Click(object sender, RoutedEventArgs e) => KunyeWindow.ShowOnce();
+
     public void RefreshIdentity()
     {
         SelfName.Text = App.Me.Settings.ComputerName;
@@ -297,6 +300,7 @@ public partial class ChatWindow : ChromeWindow
         }
         UpdateChatEmpty();
         ScrollEnd();
+        App.Me.MarkRead(id);
         _ = MarkSeen();
     }
 
@@ -439,16 +443,45 @@ public partial class ChatWindow : ChromeWindow
         }
 
         var offer = UpdateService.Pending;
-        UpdateButton.Visibility = offer == null ? Visibility.Collapsed : Visibility.Visible;
-        UpdateButton.IsEnabled = offer != null && !UpdateService.Applying;
-        UpdateButton.ToolTip = offer == null ? null : "Sürüm " + offer.Version.ToString(3) + " — kurmak için tıklayın";
+        var pending = offer != null;
+        UpdateMark.Visibility = pending ? Visibility.Visible : Visibility.Collapsed;
+        UpdateMark.IsEnabled = pending && !UpdateService.Applying;
+        UpdateMark.ToolTip = !pending ? null : UpdateService.Applying ? "İndiriliyor…" : "Sürüm " + offer!.Version.ToString(3) + " — kurmak için tıklayın";
+        if (pending && !UpdateService.Applying) StartBlink();
+        else StopBlink();
+    }
+
+    void StartBlink()
+    {
+        if (_blink != null) return;
+        var animation = new DoubleAnimation(1, 0.2, TimeSpan.FromMilliseconds(420))
+        {
+            AutoReverse = true,
+            RepeatBehavior = RepeatBehavior.Forever
+        };
+        Storyboard.SetTarget(animation, LogoFrame);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.OpacityProperty));
+        _blink = new Storyboard();
+        _blink.Children.Add(animation);
+        _blink.Begin(this, true);
+    }
+
+    void StopBlink()
+    {
+        if (_blink != null)
+        {
+            _blink.Stop(this);
+            _blink = null;
+        }
+        LogoFrame.Opacity = 1;
     }
 
     async void Update_Click(object sender, RoutedEventArgs e)
     {
         if (UpdateService.Pending == null || UpdateService.Applying) return;
-        UpdateButton.IsEnabled = false;
-        UpdateButton.ToolTip = "İndiriliyor…";
+        UpdateMark.IsEnabled = false;
+        UpdateMark.ToolTip = "İndiriliyor…";
+        StopBlink();
         var error = await UpdateService.ApplyPendingAsync();
         if (error == null)
         {

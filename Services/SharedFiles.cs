@@ -600,6 +600,8 @@ static class SharedFiles
         }
     }
 
+    public static void Refresh(string path) => Notify(path);
+
     static void Notify(string path)
     {
         try { SHChangeNotify(0x1000, 0x0005, path, IntPtr.Zero); }

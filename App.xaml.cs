@@ -21,6 +21,7 @@ public partial class App : Application
     TrayService? _tray;
     ShareWindow? _share;
     int _unread;
+    readonly HashSet<string> _pending = new(StringComparer.Ordinal);
     ChatWindow? _chat;
     FilesWindow? _files;
     EventWaitHandle? _commandWait;
@@ -125,6 +126,7 @@ public partial class App : Application
                 Store.RememberPerson(peer.Id, peer.Name);
                 if (peer.Online) _ = _node.FlushAsync(peer.Id);
             }
+            DesktopShortcut.Maintain(list);
         };
         _node.ChatReceived += OnChat;
         _node.FileReceived += OnFile;
@@ -217,16 +219,22 @@ public partial class App : Application
         _chat?.ClearPeer(id);
     }
 
+    public void MarkRead(string? peerId)
+    {
+        if (string.IsNullOrEmpty(peerId) || !_pending.Remove(peerId)) return;
+        _unread = _pending.Count;
+        _tray?.SetUnread(_unread);
+    }
+
     public void ShowChat(string? peerId = null)
     {
-        _unread = 0;
-        _tray?.SetUnread(0);
         _chat ??= new ChatWindow();
         if (_chat.WindowState == WindowState.Minimized)
             _chat.WindowState = WindowState.Normal;
         _chat.Show();
         _chat.Activate();
         if (!string.IsNullOrEmpty(peerId)) _chat.SelectPeer(peerId);
+        else MarkRead(_chat.SelectedId);
     }
 
     public void ShowSettings()
@@ -475,7 +483,8 @@ public partial class App : Application
     void Notice(string peerId, string title, string text)
     {
         if (_chat is { IsVisible: true } && _chat.SelectedId == peerId) return;
-        _unread++;
+        _pending.Add(peerId);
+        _unread = _pending.Count;
         _tray?.SetUnread(_unread);
         _tray?.Balloon(title, text);
     }

@@ -98,20 +98,20 @@ static class TrayGlyph
         graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
         graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
         graphics.Clear(System.Drawing.Color.Transparent);
-        if (BrandAssets.TrayImage != null)
-            graphics.DrawImage(BrandAssets.TrayImage, 0, 0, 32, 32);
-
-        var navy = System.Drawing.Color.FromArgb(11, 31, 75);
-        if (count > 0)
+        if (count <= 0)
         {
-            using var badge = new System.Drawing.SolidBrush(alert ? System.Drawing.Color.White : System.Drawing.Color.FromArgb(220, 38, 38));
-            graphics.FillEllipse(badge, 15, 0, 17, 17);
-            var text = count > 9 ? "9+" : count.ToString();
-            using var font = new System.Drawing.Font("Segoe UI", count > 9 ? 7f : 8f, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
-            var size = graphics.MeasureString(text, font);
-            using var ink = new System.Drawing.SolidBrush(alert ? navy : System.Drawing.Color.White);
-            graphics.DrawString(text, font, ink, 15 + (17 - size.Width) / 2f, (17 - size.Height) / 2f - 0.4f);
+            if (BrandAssets.TrayImage != null)
+                graphics.DrawImage(BrandAssets.TrayImage, 0, 0, 32, 32);
+            return Own(bitmap);
         }
+
+        var red = System.Drawing.Color.FromArgb(220, 38, 38);
+        using (var plate = new System.Drawing.SolidBrush(alert ? System.Drawing.Color.White : red))
+            graphics.FillEllipse(plate, 1, 1, 30, 30);
+        using var font = new System.Drawing.Font("Segoe UI", 20f, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
+        using var ink = new System.Drawing.SolidBrush(alert ? red : System.Drawing.Color.White);
+        var size = graphics.MeasureString("!", font);
+        graphics.DrawString("!", font, ink, (32 - size.Width) / 2f, (32 - size.Height) / 2f - 2f);
 
         return Own(bitmap);
     }

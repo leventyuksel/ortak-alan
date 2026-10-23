@@ -29,11 +29,53 @@ static class DesktopShortcut
 
     public static string CreateFolder(string person, string folderName, string peerId, string shareId)
     {
+        var label = Place(person, folderName, peerId, shareId);
+        Remember(peerId, shareId, person, folderName, label);
+        return label;
+    }
+
+    public static void Maintain(IReadOnlyList<PeerSnapshot> peers)
+    {
+        List<KeptFolder> kept;
+        try { kept = Load(); }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            return;
+        }
+
+        var changed = false;
+        foreach (var item in kept.ToList())
+        {
+            var peer = peers.FirstOrDefault(p => p.Id == item.PeerId);
+            if (peer is not { Online: true }) continue;
+            var open = peer.Shares.Any(share => share.Kind == "folder" && share.Id == item.ShareId);
+            if (open)
+            {
+                var path = Path.Combine(SharedFolder(Environment.GetFolderPath(Environment.SpecialFolder.Desktop)), item.Label + ".lnk");
+                if (!File.Exists(path))
+                    Place(item.Person, item.Folder, item.PeerId, item.ShareId);
+                continue;
+            }
+
+            RemoveLink(item.Label);
+            kept.Remove(item);
+            changed = true;
+        }
+
+        if (changed) Save(kept);
+    }
+
+    static string Place(string person, string folderName, string peerId, string shareId)
+    {
         var exe = Exe();
         var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         var label = Clean(person) + " - " + Clean(folderName);
         if (exe.Length == 0) return label;
         var folder = SharedFolder(desktop);
+        var folderAttrs = File.GetAttributes(folder);
+        if (folderAttrs.HasFlag(FileAttributes.ReadOnly))
+            File.SetAttributes(folder, folderAttrs & ~FileAttributes.ReadOnly);
         var icon = Path.Combine(Environment.SystemDirectory, "shell32.dll") + ",4";
         Write(
             Path.Combine(folder, label + ".lnk"),
@@ -45,6 +87,7 @@ static class DesktopShortcut
         var stray = Path.Combine(desktop, label + ".lnk");
         if (File.Exists(stray)) File.Delete(stray);
         Dress(folder);
+        SharedFiles.Refresh(folder);
         return label;
     }
 
@@ -52,8 +95,12 @@ static class DesktopShortcut
     {
         var type = Type.GetTypeFromProgID("WScript.Shell");
         if (type == null) return;
+        var directory = Path.GetDirectoryName(linkPath);
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
+        var temp = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".lnk");
         dynamic shell = Activator.CreateInstance(type)!;
-        dynamic shortcut = shell.CreateShortcut(linkPath);
+        dynamic shortcut = shell.CreateShortcut(temp);
         shortcut.TargetPath = target;
         shortcut.Arguments = arguments ?? "";
         if (!string.IsNullOrWhiteSpace(workingDirectory))
@@ -62,6 +109,12 @@ static class DesktopShortcut
             shortcut.IconLocation = icon;
         shortcut.Description = description ?? "";
         shortcut.Save();
+        if (File.Exists(linkPath))
+        {
+            File.SetAttributes(linkPath, FileAttributes.Normal);
+            File.Delete(linkPath);
+        }
+        File.Move(temp, linkPath);
     }
 
     static string SharedFolder(string desktop)
@@ -114,9 +167,14 @@ static class DesktopShortcut
             var ini = Path.Combine(folder, "desktop.ini");
             var icon = Path.Combine(Environment.SystemDirectory, "shell32.dll") + ",4";
             var text = "[.ShellClassInfo]\r\nIconResource=" + icon + "\r\nInfoTip=Bağlanan paylaşılan klasörler\r\n";
+            if (File.Exists(ini))
+                File.SetAttributes(ini, FileAttributes.Normal);
             File.WriteAllText(ini, text, new UnicodeEncoding(false, true));
             File.SetAttributes(ini, FileAttributes.Hidden | FileAttributes.System);
-            File.SetAttributes(folder, File.GetAttributes(folder) | FileAttributes.System | FileAttributes.ReadOnly);
+            var attrs = File.GetAttributes(folder);
+            if (attrs.HasFlag(FileAttributes.ReadOnly))
+                File.SetAttributes(folder, attrs & ~FileAttributes.ReadOnly);
+            File.SetAttributes(folder, File.GetAttributes(folder) | FileAttributes.System);
         }
         catch (Exception ex)
         {
@@ -124,20 +182,74 @@ static class DesktopShortcut
         }
     }
 
-    static (string Args, string Icon, string Description)? Read(string linkPath)
+    static void RemoveLink(string label)
     {
+        if (label.Length == 0) return;
+        var path = Path.Combine(SharedFolder(Environment.GetFolderPath(Environment.SpecialFolder.Desktop)), label + ".lnk");
         try
         {
+            if (!File.Exists(path)) return;
+            File.SetAttributes(path, FileAttributes.Normal);
+            File.Delete(path);
+            SharedFiles.Refresh(Path.GetDirectoryName(path)!);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+        }
+    }
+
+    static void Remember(string peerId, string shareId, string person, string folder, string label)
+    {
+        var kept = Load();
+        var found = kept.FirstOrDefault(item => item.PeerId == peerId && item.ShareId == shareId);
+        if (found == null)
+            kept.Add(new KeptFolder { PeerId = peerId, ShareId = shareId, Person = person, Folder = folder, Label = label });
+        else
+        {
+            found.Person = person;
+            found.Folder = folder;
+            found.Label = label;
+        }
+        Save(kept);
+    }
+
+    static List<KeptFolder> Load()
+    {
+        var path = StorePath();
+        if (!File.Exists(path)) return new();
+        return System.Text.Json.JsonSerializer.Deserialize<List<KeptFolder>>(File.ReadAllText(path), SettingsService.JsonOptions) ?? new();
+    }
+
+    static void Save(List<KeptFolder> kept)
+    {
+        var path = StorePath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(kept, SettingsService.JsonOptions));
+    }
+
+    static string StorePath() => Path.Combine(App.Me.Store.DirectoryPath, "baglantilar.json");
+
+    static (string Args, string Icon, string Description)? Read(string linkPath)
+    {
+        var temp = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".lnk");
+        try
+        {
+            File.Copy(linkPath, temp, true);
             var type = Type.GetTypeFromProgID("WScript.Shell");
             if (type == null) return null;
             dynamic shell = Activator.CreateInstance(type)!;
-            dynamic shortcut = shell.CreateShortcut(linkPath);
+            dynamic shortcut = shell.CreateShortcut(temp);
             return ((string)shortcut.Arguments, (string)shortcut.IconLocation, (string)shortcut.Description);
         }
         catch (Exception ex)
         {
             Log.Write(ex);
             return null;
+        }
+        finally
+        {
+            try { if (File.Exists(temp)) File.Delete(temp); } catch { /* geçici */ }
         }
     }
 
@@ -147,6 +259,15 @@ static class DesktopShortcut
         if (!string.IsNullOrWhiteSpace(current) && File.Exists(current)) return current;
         var installed = AppInfo.InstalledExe;
         return File.Exists(installed) ? installed : current ?? "";
+    }
+
+    sealed class KeptFolder
+    {
+        public string PeerId { get; set; } = "";
+        public string ShareId { get; set; } = "";
+        public string Person { get; set; } = "";
+        public string Folder { get; set; } = "";
+        public string Label { get; set; } = "";
     }
 
     static string Clean(string value)

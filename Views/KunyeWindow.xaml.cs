@@ -24,7 +24,7 @@ public partial class KunyeWindow : ChromeWindow
     {
         InitializeComponent();
         UseLogo(LogoImage, openKunye: false);
-        VersionText.Text = AppInfo.Display;
+        VersionText.Text = "Sürüm " + AppInfo.Display;
         UpdateService.PendingChanged += ShowUpdate;
         Closed += (_, _) => UpdateService.PendingChanged -= ShowUpdate;
         ShowUpdate();

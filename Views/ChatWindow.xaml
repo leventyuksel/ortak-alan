@@ -19,18 +19,14 @@
         <RowDefinition Height="*"/>
       </Grid.RowDefinitions>
 
-      <Grid>
-      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="8,8,8,4">
+      <Grid Margin="8,8,8,4">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,0,8,0">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <Border Width="28" Height="28" CornerRadius="7" Background="White" VerticalAlignment="Center">
-            <Image x:Name="LogoImage" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          </Border>
-          <TextBlock x:Name="SelfName" Margin="10,0,0,0" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center"/>
-          <TextBlock x:Name="VersionText" Margin="8,1,0,0" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
-          <Button x:Name="UpdateButton" Visibility="Collapsed" Style="{StaticResource GhostButton}" Margin="4,0,0,0" Padding="2,0" MinWidth="22" MinHeight="28" ToolTip="Güncelleme var" Click="Update_Click" Cursor="Hand">
-            <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
-          </Button>
-          <Button Style="{StaticResource SecondaryButton}" Margin="10,0,0,0" Padding="12,6" MinHeight="36" Click="Folder_Click">
+          <Button Style="{StaticResource SecondaryButton}" Margin="0,0,0,0" Padding="12,6" MinHeight="36" Click="Folder_Click">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="15" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"/>
               <TextBlock Text="Klasör paylaş" Margin="8,0,0,0" VerticalAlignment="Center"/>
@@ -48,14 +44,24 @@
               <TextBlock Text="Paylaşımlar" Margin="8,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
-          <Button Style="{StaticResource SecondaryButton}" Margin="8,0,4,0" Padding="12,6" MinHeight="36" Click="Settings_Click">
+          <Button Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Padding="12,6" MinHeight="36" Click="Settings_Click">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="15" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"/>
               <TextBlock Text="Ayarlar" Margin="8,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
         </StackPanel>
-      </ScrollViewer>
+        </ScrollViewer>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button x:Name="UpdateMark" Style="{StaticResource GhostButton}" Visibility="Collapsed" Click="Update_Click" Cursor="Hand" Padding="4,0" MinWidth="22" MinHeight="28" Margin="0,0,2,0" VerticalAlignment="Center">
+            <TextBlock Text="!" Foreground="#FFD000" FontSize="22" FontWeight="Bold" VerticalAlignment="Center"/>
+          </Button>
+          <Button Style="{StaticResource GhostButton}" Click="Kunye_Click" Cursor="Hand" ToolTip="Künye" Padding="2" MinHeight="28" VerticalAlignment="Center">
+            <Border x:Name="LogoFrame" Width="28" Height="28" CornerRadius="7" Background="White">
+              <Image x:Name="LogoImage" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+          </Button>
+        </StackPanel>
       </Grid>
 
       <Grid Grid.Row="1">
@@ -65,7 +71,8 @@
         </Grid.ColumnDefinitions>
         <Border Background="{DynamicResource Wash}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,1,0">
           <DockPanel>
-            <Border x:Name="RoomCard" DockPanel.Dock="Top" Margin="8,8,8,4" MinHeight="48" CornerRadius="8" BorderThickness="1.5" Padding="8,6" Cursor="Hand"
+            <TextBlock x:Name="SelfName" DockPanel.Dock="Top" Margin="12,10,12,6" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" TextTrimming="CharacterEllipsis"/>
+            <Border x:Name="RoomCard" DockPanel.Dock="Top" Margin="8,0,8,4" MinHeight="48" CornerRadius="8" BorderThickness="1.5" Padding="8,6" Cursor="Hand"
                     BorderBrush="#00F0FF" Background="#D008242C" MouseLeftButtonUp="Room_Click">
               <Border.Effect>
                 <DropShadowEffect BlurRadius="12" ShadowDepth="0" Opacity="0.7" Color="#00E5FF"/>
