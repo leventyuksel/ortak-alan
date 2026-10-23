@@ -54,6 +54,26 @@ public partial class ChatWindow : ChromeWindow
         Top = area.Top + 8;
     }
 
+    public void ClearPeer(string id)
+    {
+        if (SelectedId != id) return;
+        _holdSelection = true;
+        PeerList.SelectedItem = null;
+        _holdSelection = false;
+        if (_lines != null) _lines.CollectionChanged -= LinesChanged;
+        _lines = null;
+        _messageView = null;
+        SelectedId = null;
+        Messages.ItemsSource = null;
+        PeerTitle.Text = "";
+        Input.IsEnabled = false;
+        SendButton.IsEnabled = false;
+        FileButton.IsEnabled = false;
+        MarkRoom(false);
+        UpdateChatEmpty();
+        StatusText.Text = "";
+    }
+
     public void SelectPeer(string id)
     {
         Show();
@@ -180,6 +200,10 @@ public partial class ChatWindow : ChromeWindow
         var menu = new ContextMenu { PlacementTarget = item, Placement = PlacementMode.MousePoint };
         menu.Items.Add(ShareMenu("Paylaşılan klasöre bağlan", peer, "folder"));
         menu.Items.Add(ShareMenu("Paylaşılan yazıcıya bağlan", peer, "printer"));
+        menu.Items.Add(new Separator());
+        var remove = new MenuItem { Header = "Listeden kaldır" };
+        remove.Click += (_, _) => App.Me.RemoveFromList(peer.Id, peer.Name);
+        menu.Items.Add(remove);
         menu.IsOpen = true;
         e.Handled = true;
     }

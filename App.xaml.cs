@@ -28,6 +28,7 @@ public partial class App : Application
     ThemeWindow? _theme;
     SettingsWindow? _settings;
     bool _demo;
+    int _restoreGate;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -106,8 +107,13 @@ public partial class App : Application
         }
 
         Directory = new PeerDirectory();
+        foreach (var person in Settings.Hidden)
+            Directory.Hidden.Add(person.Id);
         foreach (var person in Settings.People.Concat(Settings.Approved))
-            Directory.Remember(person.Id, person.Name);
+        {
+            if (!Directory.Hidden.Contains(person.Id))
+                Directory.Remember(person.Id, person.Name);
+        }
         Chats = new ConversationStore(dataDir);
         _node = new PeerNode(Settings, Store, AskApproval);
         _node.PeersUpdated += list =>
@@ -202,6 +208,13 @@ public partial class App : Application
     {
         if (_share is { IsVisible: true }) _share.Hide();
         else ShowShare();
+    }
+
+    public void RemoveFromList(string id, string name)
+    {
+        Store.HidePerson(id, name);
+        Directory.Forget(id);
+        _chat?.ClearPeer(id);
     }
 
     public void ShowChat(string? peerId = null)
@@ -316,7 +329,7 @@ public partial class App : Application
 
     void OnChat(IncomingChat message)
     {
-        Chats.Add(message.PeerId, new ChatLine
+        var added = Chats.Add(message.PeerId, new ChatLine
         {
             Id = message.MessageId,
             Mine = false,
@@ -325,11 +338,12 @@ public partial class App : Application
             Utc = DateTime.Now
         });
         Notice(message.PeerId, message.PeerName, message.Text);
+        if (added) AskRestore(message.PeerId, message.PeerName);
     }
 
     void OnFile(IncomingFile file)
     {
-        Chats.Add(file.PeerId, new ChatLine
+        var added = Chats.Add(file.PeerId, new ChatLine
         {
             Id = file.MessageId,
             Mine = false,
@@ -341,6 +355,33 @@ public partial class App : Application
             Utc = DateTime.Now
         });
         Notice(file.PeerId, file.PeerName, "Dosya: " + file.FileName);
+        if (added) AskRestore(file.PeerId, file.PeerName);
+    }
+
+    void AskRestore(string id, string name)
+    {
+        if (!Store.IsHidden(id)) return;
+        if (Interlocked.CompareExchange(ref _restoreGate, 1, 0) != 0) return;
+        try
+        {
+            var label = name.Length == 0 ? "Bu bilgisayar" : name;
+            var owner = _chat is { IsVisible: true } ? _chat : null;
+            var yes = MessageBox.Show(
+                owner,
+                label + " mesaj gönderdi. Kişi listesine eklensin mi?",
+                "Ortak Alan",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) == MessageBoxResult.Yes;
+            if (!yes) return;
+            Store.RestorePerson(id, label);
+            Directory.Unhide(id);
+            Directory.Remember(id, label);
+            ShowChat(id);
+        }
+        finally
+        {
+            _restoreGate = 0;
+        }
     }
 
     void NoteDelivery(string peerId, string messageId, string? error)

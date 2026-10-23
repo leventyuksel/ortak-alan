@@ -41,6 +41,7 @@ public sealed class SettingsService
                 model.Approved ??= new();
                 model.Rejected ??= new();
                 model.People ??= new();
+                model.Hidden ??= new();
                 model.Shares ??= new();
                 model.FolderColors ??= new();
                 if (string.IsNullOrWhiteSpace(model.ComputerId))
@@ -91,9 +92,34 @@ public sealed class SettingsService
         }
     }
 
+    public bool IsHidden(string id)
+    {
+        lock (_gate) return Current.Hidden.Any(p => p.Id == id);
+    }
+
+    public void HidePerson(string id, string name)
+    {
+        if (id.Length == 0) return;
+        lock (_gate)
+        {
+            Current.People.RemoveAll(p => p.Id == id);
+            Current.Hidden.RemoveAll(p => p.Id == id);
+            Current.Hidden.Add(new KnownPeer { Id = id, Name = name.Length == 0 ? "Bilgisayar" : name });
+            SaveLocked();
+        }
+    }
+
+    public void RestorePerson(string id, string name)
+    {
+        if (id.Length == 0) return;
+        lock (_gate)
+            Current.Hidden.RemoveAll(p => p.Id == id);
+        RememberPerson(id, name);
+    }
+
     public void RememberPerson(string id, string name)
     {
-        if (id.Length == 0 || id == Current.ComputerId) return;
+        if (id.Length == 0 || id == Current.ComputerId || IsHidden(id)) return;
         lock (_gate)
         {
             var found = Current.People.FirstOrDefault(p => p.Id == id);

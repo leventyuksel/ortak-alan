@@ -50,6 +50,7 @@ public sealed class SettingsModel
     public List<KnownPeer> Approved { get; set; } = new();
     public List<KnownPeer> Rejected { get; set; } = new();
     public List<KnownPeer> People { get; set; } = new();
+    public List<KnownPeer> Hidden { get; set; } = new();
     public List<ShareItem> Shares { get; set; } = new();
     public Dictionary<string, string> FolderColors { get; set; } = new();
 }
@@ -282,6 +283,7 @@ public sealed class DirEntry
 public sealed class PeerDirectory
 {
     public ObservableCollection<PeerVm> Peers { get; } = new();
+    public HashSet<string> Hidden { get; } = new(StringComparer.OrdinalIgnoreCase);
     public event Action? Changed;
     public int OnlineCount => Peers.Count(p => p.Online);
 
@@ -290,6 +292,7 @@ public sealed class PeerDirectory
         var ids = new HashSet<string>();
         foreach (var snapshot in list.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase))
         {
+            if (Hidden.Contains(snapshot.Id)) continue;
             ids.Add(snapshot.Id);
             var vm = Peers.FirstOrDefault(p => p.Id == snapshot.Id);
             if (vm == null)
@@ -300,18 +303,35 @@ public sealed class PeerDirectory
             vm.Apply(snapshot);
         }
 
-        foreach (var peer in Peers)
+        for (var i = Peers.Count - 1; i >= 0; i--)
         {
-            if (!ids.Contains(peer.Id))
-                peer.Online = false;
+            if (Hidden.Contains(Peers[i].Id))
+                Peers.RemoveAt(i);
+            else if (!ids.Contains(Peers[i].Id))
+                Peers[i].Online = false;
         }
 
         Changed?.Invoke();
     }
 
+    public void Forget(string id)
+    {
+        if (id.Length == 0) return;
+        Hidden.Add(id);
+        var peer = Peers.FirstOrDefault(item => item.Id == id);
+        if (peer != null) Peers.Remove(peer);
+        Changed?.Invoke();
+    }
+
+    public void Unhide(string id)
+    {
+        if (id.Length == 0) return;
+        Hidden.Remove(id);
+    }
+
     public void Remember(string id, string name)
     {
-        if (id.Length == 0 || Peers.Any(p => p.Id == id)) return;
+        if (id.Length == 0 || Hidden.Contains(id) || Peers.Any(p => p.Id == id)) return;
         var vm = new PeerVm { Id = id };
         vm.Apply(new PeerSnapshot
         {
