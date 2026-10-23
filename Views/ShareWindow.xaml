@@ -91,19 +91,22 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <StackPanel Margin="0,8,0,10">
-                    <Grid>
-                      <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                      </Grid.ColumnDefinitions>
-                      <Ellipse Width="8" Height="8" Fill="{Binding Dot}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                      <StackPanel Grid.Column="1">
-                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
-                        <TextBlock Text="{Binding Status}" Foreground="{StaticResource Muted}" FontSize="12"/>
-                      </StackPanel>
-                      <Button Grid.Column="2" Content="Mesaj" Style="{StaticResource GhostButton}" Click="Message_Click"/>
-                    </Grid>
+                    <Border CornerRadius="8" BorderThickness="1.5" Padding="8,6" BorderBrush="{Binding BoxBorder}" Background="{Binding BoxFill}">
+                      <Border.Effect>
+                        <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.9" Color="{Binding GlowColor}"/>
+                      </Border.Effect>
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="*"/>
+                          <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="White"/>
+                          <TextBlock Text="{Binding Status}" Foreground="{Binding BoxBorder}" FontSize="12"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Mesaj" Style="{StaticResource GhostButton}" Click="Message_Click"/>
+                      </Grid>
+                    </Border>
                     <ItemsControl ItemsSource="{Binding Shares}" Margin="16,4,0,0">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -136,7 +139,7 @@
           <ColumnDefinition/>
         </Grid.ColumnDefinitions>
         <Button Content="Mesajlar" Style="{StaticResource GhostButton}" Click="Chat_Click"/>
-        <Button Grid.Column="1" Content="Görünüm" Style="{StaticResource GhostButton}" Click="Theme_Click"/>
+        <Button Grid.Column="1" Content="Ayarlar" Style="{StaticResource GhostButton}" Click="Theme_Click"/>
       </Grid>
       <TextBlock x:Name="StatusText" Foreground="{StaticResource Muted}" FontSize="12" Margin="2,8,2,0" TextWrapping="Wrap"/>
     </StackPanel>

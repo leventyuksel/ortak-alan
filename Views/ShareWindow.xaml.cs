@@ -132,7 +132,7 @@ public partial class ShareWindow : ChromeWindow
     }
 
     void Chat_Click(object sender, RoutedEventArgs e) => App.Me.ShowChat();
-    void Theme_Click(object sender, RoutedEventArgs e) => App.Me.ShowTheme();
+    void Theme_Click(object sender, RoutedEventArgs e) => App.Me.ShowSettings();
     void Hide_Click(object sender, RoutedEventArgs e) => Hide();
 
     void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

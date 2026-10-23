@@ -118,8 +118,15 @@ public sealed class PeerVm : Observable
             if (!SetField(ref _online, value)) return;
             Raise(nameof(Status));
             Raise(nameof(Dot));
+            Raise(nameof(BoxBorder));
+            Raise(nameof(BoxFill));
+            Raise(nameof(GlowColor));
         }
     }
+
+    public Brush BoxBorder => Online ? OnlineBorder : OfflineBorder;
+    public Brush BoxFill => Online ? OnlineFill : OfflineFill;
+    public Color GlowColor => Online ? Color.FromRgb(0x39, 0xFF, 0x6A) : Color.FromRgb(0xFF, 0x3B, 0x4A);
 
     public string Status => !Online ? "Çevrimdışı" : TailscalePeers.IsAddress(Ip) ? "Çevrimiçi · Tailscale" : "Çevrimiçi";
     public Brush Dot => Online ? OnlineBrush : OfflineBrush;
@@ -127,7 +134,11 @@ public sealed class PeerVm : Observable
     public int Port { get; private set; }
 
     static readonly SolidColorBrush OnlineBrush = Freeze(Color.FromRgb(0x16, 0xA3, 0x4A));
-    static readonly SolidColorBrush OfflineBrush = Freeze(Color.FromRgb(0xD1, 0xD5, 0xDB));
+    static readonly SolidColorBrush OfflineBrush = Freeze(Color.FromRgb(0xFF, 0x3B, 0x4A));
+    static readonly SolidColorBrush OnlineBorder = Freeze(Color.FromRgb(0x39, 0xFF, 0x6A));
+    static readonly SolidColorBrush OfflineBorder = Freeze(Color.FromRgb(0xFF, 0x3B, 0x4A));
+    static readonly SolidColorBrush OnlineFill = Freeze(Color.FromArgb(210, 0x0C, 0x2E, 0x18));
+    static readonly SolidColorBrush OfflineFill = Freeze(Color.FromArgb(210, 0x3A, 0x10, 0x16));
 
     static SolidColorBrush Freeze(Color color)
     {

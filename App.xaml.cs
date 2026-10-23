@@ -115,7 +115,7 @@ public partial class App : Application
                 ToggleChat,
                 ShowShare,
                 () => ShowChat(),
-                ShowTheme,
+                ShowSettings,
                 ExitApp);
         }
 

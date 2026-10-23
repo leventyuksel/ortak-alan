@@ -4,9 +4,8 @@
                xmlns:v="clr-namespace:OrtakAlan.Views"
                Title="Ortak Alan"
                Width="980"
-               MinWidth="760"
-               MaxWidth="1280"
-               MinHeight="520"
+               MinWidth="420"
+               MinHeight="320"
                WindowStyle="SingleBorderWindow"
                WindowStartupLocation="Manual"
                ResizeMode="CanResize"
@@ -20,93 +19,67 @@
         <RowDefinition Height="*"/>
       </Grid.RowDefinitions>
 
-      <StackPanel Margin="14,12,14,8">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-          </Grid.ColumnDefinitions>
+      <Grid>
+      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="8,8,8,4">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Border Width="28" Height="28" CornerRadius="7" Background="White" VerticalAlignment="Center">
             <Image x:Name="LogoImage" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
-          <StackPanel Grid.Column="1" Margin="10,0,0,0">
+          <TextBlock x:Name="SelfName" Margin="10,0,0,0" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center"/>
+          <TextBlock x:Name="VersionText" Margin="8,1,0,0" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+          <Button x:Name="UpdateButton" Visibility="Collapsed" Style="{StaticResource GhostButton}" Margin="4,0,0,0" Padding="2,0" MinWidth="22" MinHeight="28" ToolTip="Güncelleme var" Click="Update_Click" Cursor="Hand">
+            <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+          </Button>
+          <Button Style="{StaticResource SecondaryButton}" Margin="10,0,0,0" Padding="12,6" MinHeight="36" Click="Folder_Click">
             <StackPanel Orientation="Horizontal">
-              <TextBlock Text="Ortak Alan" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center"/>
-              <TextBlock x:Name="VersionText" Margin="8,1,0,0" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
-              <Button x:Name="UpdateButton" Visibility="Collapsed" Style="{StaticResource GhostButton}" Margin="6,0,0,0" Padding="2,0" MinWidth="22" MinHeight="22" ToolTip="Güncelleme var" Click="Update_Click" Cursor="Hand">
-                <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
-              </Button>
+              <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="15" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"/>
+              <TextBlock Text="Klasör paylaş" Margin="8,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
-            <TextBlock x:Name="SelfName" Foreground="{DynamicResource Muted}" FontSize="12"/>
-          </StackPanel>
-        </Grid>
-        <TextBlock x:Name="OnlineText" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,8,0,8"/>
-        <WrapPanel>
-          <Button Content="Klasör paylaş" Style="{StaticResource GhostButton}" Margin="0,0,4,4" Padding="8,6" MinHeight="32" Click="Folder_Click"/>
-          <Button Content="Yazıcı paylaş" Style="{StaticResource GhostButton}" Margin="0,0,4,4" Padding="8,6" MinHeight="32" Click="Printer_Click"/>
-          <Button Content="Paylaşımlar" Style="{StaticResource GhostButton}" Margin="0,0,4,4" Padding="8,6" MinHeight="32" Click="Shares_Click"/>
-          <Button x:Name="TemaButton" Content="Tema" Style="{StaticResource GhostButton}" Margin="0,0,4,4" Padding="8,6" MinHeight="32" Click="Tema_Click"/>
-          <Button Content="Ayarlar" Style="{StaticResource GhostButton}" Margin="0,0,4,4" Padding="8,6" MinHeight="32" Click="Settings_Click"/>
-        </WrapPanel>
-        <Popup x:Name="TemaPopup" PlacementTarget="{Binding ElementName=TemaButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
-          <Border Background="{DynamicResource Paper}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="12" Padding="14,12" Margin="0,8,0,0">
-            <StackPanel>
-              <TextBlock Text="Görünüm" FontWeight="SemiBold" Margin="0,0,0,8"/>
-              <UniformGrid Columns="2" Margin="0,0,0,12">
-                <Button x:Name="LightButton" Content="Aydınlık" Margin="0,0,4,0" Tag="Aydınlık" Click="Appearance_Click" Style="{StaticResource SecondaryButton}"/>
-                <Button x:Name="DarkButton" Content="Karanlık" Margin="4,0,0,0" Tag="Karanlık" Click="Appearance_Click" Style="{StaticResource SecondaryButton}"/>
-              </UniformGrid>
-              <TextBlock Text="Vurgu rengi" FontWeight="SemiBold" Margin="0,0,0,8"/>
-              <ItemsControl x:Name="TemaSwatches">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <UniformGrid Columns="6"/>
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Button Width="36" Height="36" Margin="3" Background="Transparent" BorderThickness="0" Click="Swatch_Click" ToolTip="{Binding Name}">
-                      <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                          <Grid>
-                            <Ellipse Width="32" Height="32" Stroke="{DynamicResource Accent}" StrokeThickness="2" Visibility="{Binding Selected, Converter={StaticResource BoolVis}}"/>
-                            <Ellipse Width="24" Height="24" Fill="{Binding Color}"/>
-                          </Grid>
-                        </ControlTemplate>
-                      </Button.Template>
-                    </Button>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+          </Button>
+          <Button Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Padding="12,6" MinHeight="36" Click="Printer_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE749;" FontFamily="Segoe MDL2 Assets" FontSize="15" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"/>
+              <TextBlock Text="Yazıcı paylaş" Margin="8,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
-          </Border>
-        </Popup>
-      </StackPanel>
+          </Button>
+          <Button Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Padding="12,6" MinHeight="36" Click="Shares_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE72D;" FontFamily="Segoe MDL2 Assets" FontSize="15" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"/>
+              <TextBlock Text="Paylaşımlar" Margin="8,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource SecondaryButton}" Margin="8,0,4,0" Padding="12,6" MinHeight="36" Click="Settings_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="15" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"/>
+              <TextBlock Text="Ayarlar" Margin="8,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </ScrollViewer>
+      </Grid>
 
       <Grid Grid.Row="1">
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="168"/>
+          <ColumnDefinition Width="168" MinWidth="120"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <Border Background="{DynamicResource Wash}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,1,0">
           <DockPanel>
-            <TextBlock DockPanel.Dock="Top" Text="Kişiler" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="10,12,10,2"/>
-            <TextBlock DockPanel.Dock="Top" Text="Ağdakiler" FontSize="12" Foreground="{DynamicResource Muted}" Margin="10,0,10,8"/>
+            <TextBlock DockPanel.Dock="Top" Text="Kişiler" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="12,12,12,2"/>
+            <TextBlock x:Name="OnlineText" DockPanel.Dock="Top" FontSize="12" Foreground="{DynamicResource Muted}" Margin="12,0,12,8"/>
             <TextBlock x:Name="EmptyPeers" DockPanel.Dock="Top" Text="Ağda kimse yok." Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="10,8,10,8"/>
             <ListBox x:Name="PeerList" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource Ink}" ItemContainerStyle="{StaticResource PeerItem}" SelectionChanged="PeerList_SelectionChanged" PreviewMouseRightButtonDown="PeerList_PreviewMouseRightButtonDown">
               <ListBox.ItemTemplate>
                 <DataTemplate>
-                  <Grid>
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="*"/>
-                      <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                  <Border CornerRadius="8" BorderThickness="1.5" Padding="8,6" BorderBrush="{Binding BoxBorder}" Background="{Binding BoxFill}">
+                    <Border.Effect>
+                      <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.9" Color="{Binding GlowColor}"/>
+                    </Border.Effect>
                     <StackPanel>
-                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
-                      <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Muted}"/>
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                      <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{Binding BoxBorder}" Margin="0,2,0,0"/>
                     </StackPanel>
-                    <Ellipse Grid.Column="1" Width="8" Height="8" Fill="{Binding Dot}" VerticalAlignment="Center"/>
-                  </Grid>
+                  </Border>
                 </DataTemplate>
               </ListBox.ItemTemplate>
             </ListBox>
@@ -122,7 +95,7 @@
           <TextBlock x:Name="PeerTitle" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="16,12,16,8"/>
           <Grid Grid.Row="1">
           <TextBlock x:Name="EmptyChat" Text="Bir bilgisayar seçin." Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" Margin="24"/>
-          <ScrollViewer x:Name="Transcript" VerticalScrollBarVisibility="Auto" Padding="14,0,14,8" Background="Transparent">
+          <ScrollViewer x:Name="Transcript" VerticalScrollBarVisibility="Auto" Padding="14,0,14,8" Background="Transparent" PreviewMouseRightButtonDown="Transcript_PreviewMouseRightButtonDown">
             <ItemsControl x:Name="Messages">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
@@ -191,20 +164,14 @@
           </Grid>
           <StackPanel Grid.Row="2" Margin="12,8,12,12">
         <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <Grid>
-            <TextBox x:Name="Input" IsEnabled="False" PreviewKeyDown="Input_PreviewKeyDown" TextChanged="Input_TextChanged"/>
-            <TextBlock x:Name="Placeholder" Text="Mesaj yazın" Foreground="{DynamicResource Muted}" Margin="12,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-          </Grid>
-          <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <TextBox x:Name="Input" IsEnabled="False" PreviewKeyDown="Input_PreviewKeyDown" TextChanged="Input_TextChanged"/>
+          <TextBlock x:Name="Placeholder" Text="Mesaj yazın" Foreground="{DynamicResource Muted}" Margin="12,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+        </Grid>
+        <WrapPanel HorizontalAlignment="Right" Margin="0,8,0,0">
             <Button x:Name="ScreenButton" Content="Ekran" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Padding="10,8" MinHeight="36" Click="Screen_Click"/>
             <Button x:Name="FileButton" Content="Dosya" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Padding="10,8" MinHeight="36" IsEnabled="False" Click="File_Click"/>
             <Button x:Name="SendButton" Content="Gönder" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Padding="12,8" MinHeight="36" IsEnabled="False" Click="Send_Click"/>
-          </StackPanel>
-        </Grid>
+        </WrapPanel>
         <TextBlock x:Name="StatusText" Foreground="{DynamicResource Muted}" FontSize="12" Margin="2,8,0,0" TextWrapping="Wrap"/>
           </StackPanel>
         </Grid>

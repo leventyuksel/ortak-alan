@@ -32,6 +32,21 @@ public sealed class ConversationStore
         Save(peerId);
     }
 
+    public void Remove(string peerId, ChatLine line)
+    {
+        var collection = Get(peerId);
+        if (!collection.Remove(line)) return;
+        Save(peerId);
+    }
+
+    public void Clear(string peerId)
+    {
+        var collection = Get(peerId);
+        if (collection.Count == 0) return;
+        collection.Clear();
+        Save(peerId);
+    }
+
     public void Save(string peerId)
     {
         if (!_open.TryGetValue(peerId, out var collection)) return;

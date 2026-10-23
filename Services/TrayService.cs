@@ -33,7 +33,7 @@ sealed class TrayService : IDisposable
         menu.Items.Add("Sohbet", null, (_, _) => chat());
         menu.Items.Add("Paylaşımlar", null, (_, _) => show());
         menu.Items.Add("Paylaşılan Dosyalar", null, (_, _) => SharedFiles.Open());
-        menu.Items.Add("Görünüm", null, (_, _) => theme());
+        menu.Items.Add("Ayarlar", null, (_, _) => theme());
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add("Çıkış", null, (_, _) => exit());
         _icon.ContextMenuStrip = menu;

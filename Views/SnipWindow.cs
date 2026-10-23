@@ -78,8 +78,9 @@ public class SnipWindow : Window
             return;
         }
 
-        Hide();
-        System.Threading.Thread.Sleep(60);
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero) ShowWindow(hwnd, 0);
+        System.Threading.Thread.Sleep(80);
         Image = Grab(rect);
         DialogResult = Image != null;
     }
@@ -147,4 +148,7 @@ public class SnipWindow : Window
 
     [DllImport("gdi32.dll")]
     static extern bool DeleteObject(IntPtr handle);
+
+    [DllImport("user32.dll")]
+    static extern bool ShowWindow(IntPtr hwnd, int command);
 }

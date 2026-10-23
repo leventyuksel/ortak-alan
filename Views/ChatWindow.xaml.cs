@@ -15,7 +15,6 @@ public partial class ChatWindow : ChromeWindow
     ObservableCollection<ChatLine>? _lines;
     bool _busy;
     public string? SelectedId { get; private set; }
-    readonly List<SwatchVm> _swatches = new();
 
     public ChatWindow()
     {
@@ -32,24 +31,13 @@ public partial class ChatWindow : ChromeWindow
         PeerList.ItemsSource = App.Me.Directory.Peers;
         Title = "Ortak Alan — " + App.Me.Settings.ComputerName;
         App.Me.Directory.Changed += RefreshPeers;
-        foreach (var theme in ThemeService.All)
-        {
-            _swatches.Add(new SwatchVm
-            {
-                Name = theme.Name,
-                Color = new SolidColorBrush(theme.Color),
-                Selected = theme.Name == App.Me.Settings.Theme
-            });
-        }
-        TemaSwatches.ItemsSource = _swatches;
-        MarkAppearance();
         RefreshPeers();
     }
 
     void DockRight()
     {
         var area = SystemParameters.WorkArea;
-        Width = Math.Min(1000, Math.Max(760, area.Width - 48));
+        Width = Math.Min(1000, Math.Max(MinWidth, area.Width - 48));
         Height = Math.Max(MinHeight, area.Height - 16);
         Left = area.Right - Width - 8;
         Top = area.Top + 8;
@@ -151,33 +139,6 @@ public partial class ChatWindow : ChromeWindow
         }
     }
 
-    void Tema_Click(object sender, RoutedEventArgs e)
-    {
-        MarkAppearance();
-        TemaPopup.IsOpen = true;
-    }
-
-    void Appearance_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement element || element.Tag is not string name) return;
-        App.Me.Settings.Appearance = name;
-        App.Me.Store.Save();
-        ThemeService.ApplyAppearance(name);
-        ThemeService.ApplyText(App.Me.Settings.TextColor);
-        ThemeService.Apply(App.Me.Settings.Theme);
-        MarkAppearance();
-    }
-
-    void MarkAppearance()
-    {
-        var dark = App.Me.Settings.Appearance == "Karanlık";
-        var soft = (Brush)FindResource("AccentSoft");
-        LightButton.Background = dark ? Brushes.Transparent : soft;
-        DarkButton.Background = dark ? soft : Brushes.Transparent;
-        LightButton.FontWeight = dark ? FontWeights.Normal : FontWeights.SemiBold;
-        DarkButton.FontWeight = dark ? FontWeights.SemiBold : FontWeights.Normal;
-    }
-
     void Folder_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Paylaşılacak klasör" };
@@ -202,17 +163,6 @@ public partial class ChatWindow : ChromeWindow
         Title = "Ortak Alan — " + App.Me.Settings.ComputerName;
     }
 
-    void Swatch_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement element || element.DataContext is not SwatchVm swatch) return;
-        foreach (var item in _swatches)
-            item.Selected = item == swatch;
-        ThemeService.Apply(swatch.Name);
-        App.Me.Settings.Theme = swatch.Name;
-        App.Me.Store.Save();
-        TemaPopup.IsOpen = false;
-    }
-
     void Bind(string id, string name)
     {
         if (_lines != null) _lines.CollectionChanged -= LinesChanged;
@@ -232,6 +182,31 @@ public partial class ChatWindow : ChromeWindow
     }
 
     void LinesChanged(object? sender, NotifyCollectionChangedEventArgs e) => ScrollEnd();
+
+    void Transcript_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (SelectedId == null || _lines == null) return;
+        var peerId = SelectedId;
+        var line = LineOf(e.OriginalSource);
+        var menu = new ContextMenu { Placement = PlacementMode.MousePoint };
+        if (line != null)
+        {
+            var one = new MenuItem { Header = "Bu mesajı sil" };
+            one.Click += (_, _) => App.Me.Chats.Remove(peerId, line);
+            menu.Items.Add(one);
+        }
+        var all = new MenuItem { Header = "Tümünü sil", IsEnabled = _lines.Count > 0 };
+        all.Click += (_, _) =>
+        {
+            if (_lines.Count == 0) return;
+            if (MessageBox.Show(this, "Bu konuşmadaki tüm mesajlar silinsin mi?", "Sohbet", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+            App.Me.Chats.Clear(peerId);
+        };
+        menu.Items.Add(all);
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
 
     void ScrollEnd() =>
         Dispatcher.BeginInvoke(() => Transcript.ScrollToEnd(), System.Windows.Threading.DispatcherPriority.Background);
@@ -304,8 +279,16 @@ public partial class ChatWindow : ChromeWindow
         ShowUpdateIcon();
     }
 
-    void Screen_Click(object sender, RoutedEventArgs e)
+    async void Screen_Click(object sender, RoutedEventArgs e)
     {
+        if (SelectedId == null)
+        {
+            MessageBox.Show(this, "Sohbete göndermek için önce soldan bir kişi seçin.", "Ekran alıntısı");
+            StatusText.Text = "Önce bir kişi seçin.";
+            return;
+        }
+
+        var peerId = SelectedId;
         Hide();
         SnipWindow snip;
         try
@@ -323,7 +306,7 @@ public partial class ChatWindow : ChromeWindow
         var editor = new ShotEditorWindow(snip.Image) { Owner = this };
         if (editor.ShowDialog() != true || string.IsNullOrEmpty(editor.OutputPath)) return;
         if (editor.SendToChat)
-            _ = SendFile(editor.OutputPath);
+            await SendFile(editor.OutputPath, peerId);
         else
             StatusText.Text = "Kaydedildi.";
     }
@@ -332,13 +315,13 @@ public partial class ChatWindow : ChromeWindow
     {
         var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Gönderilecek dosya" };
         if (dialog.ShowDialog(this) != true) return;
-        await SendFile(dialog.FileName);
+        await SendFile(dialog.FileName, SelectedId);
     }
 
     async void Window_Drop(object sender, DragEventArgs e)
     {
         if (e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0)
-            await SendFile(files[0]);
+            await SendFile(files[0], SelectedId);
     }
 
     void Window_DragOver(object sender, DragEventArgs e)
@@ -347,13 +330,16 @@ public partial class ChatWindow : ChromeWindow
         e.Handled = true;
     }
 
-    async Task SendFile(string path)
+    async Task SendFile(string path, string? peerId)
     {
-        if (SelectedId == null)
+        if (string.IsNullOrEmpty(peerId))
         {
-            StatusText.Text = "Bir bilgisayar seçin.";
+            MessageBox.Show(this, "Sohbete göndermek için önce soldan bir kişi seçin.", "Ekran alıntısı");
+            StatusText.Text = "Önce bir kişi seçin.";
             return;
         }
+        if (peerId != SelectedId)
+            Bind(peerId, App.Me.Directory.Peers.FirstOrDefault(p => p.Id == peerId)?.Name ?? "Sohbet");
         if (_busy) return;
         _busy = true;
         var name = System.IO.Path.GetFileName(path);
@@ -366,21 +352,21 @@ public partial class ChatWindow : ChromeWindow
             Status = "Gönderiliyor",
             Utc = DateTime.Now
         };
-        App.Me.Chats.Add(SelectedId, line);
+        App.Me.Chats.Add(peerId, line);
         StatusText.Text = "Gönderiliyor…";
         try
         {
-            var error = await App.Me.Node.SendFileAsync(SelectedId, path);
+            var error = await App.Me.Node.SendFileAsync(peerId, path);
             line.Status = error ?? "Gönderildi";
-            StatusText.Text = error ?? "";
-            App.Me.Chats.Save(SelectedId);
+            StatusText.Text = error ?? "Gönderildi.";
+            App.Me.Chats.Save(peerId);
         }
         catch (Exception ex)
         {
             Log.Write(ex);
             line.Status = "Gönderilemedi";
             StatusText.Text = "Gönderilemedi.";
-            App.Me.Chats.Save(SelectedId);
+            App.Me.Chats.Save(peerId);
         }
         finally
         {

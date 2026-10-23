@@ -60,7 +60,6 @@ public partial class ShotEditorWindow : ChromeWindow
         OutputPath = dialog.FileName;
         SendToChat = false;
         DialogResult = true;
-        Close();
     }
 
     void Send_Click(object sender, RoutedEventArgs e)
@@ -72,7 +71,6 @@ public partial class ShotEditorWindow : ChromeWindow
         OutputPath = path;
         SendToChat = true;
         DialogResult = true;
-        Close();
     }
 
     void UsePen()
