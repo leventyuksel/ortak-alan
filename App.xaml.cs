@@ -22,6 +22,7 @@ public partial class App : Application
     ShareWindow? _share;
     int _unread;
     ChatWindow? _chat;
+    FilesWindow? _files;
     EventWaitHandle? _commandWait;
     CancellationTokenSource? _commandStop;
     ThemeWindow? _theme;
@@ -72,6 +73,11 @@ public partial class App : Application
             {
                 if (TryKlasor(e.Args, out var peerId, out var shareId))
                     CommandBus.Send(peerId, shareId);
+                else if (HasFlag(e.Args, "--paylasilan"))
+                {
+                    if (!CommandBus.ShowFiles())
+                        MessageBox.Show("Ortak Alan zaten çalışıyor. Sağ alttaki simgeden açabilirsiniz.", "Ortak Alan");
+                }
                 else if (!CommandBus.ShowChat())
                     MessageBox.Show("Ortak Alan zaten çalışıyor. Sağ alttaki simgeden açabilirsiniz.", "Ortak Alan");
                 Shutdown();
@@ -89,7 +95,10 @@ public partial class App : Application
             else AutostartService.Disable();
         }
         if (!_demo)
+        {
             DesktopShortcut.Ensure(fresh);
+            WindowsShareService.RefreshAccess(dataDir, Settings.Shares);
+        }
 
         Directory = new PeerDirectory();
         Chats = new ConversationStore(dataDir);
@@ -115,6 +124,9 @@ public partial class App : Application
             ShowChat();
             ListenForCommands();
         }
+        _ = UpdateService.LookAsync();
+        if (HasFlag(e.Args, "--paylasilan"))
+            ShowFiles();
         if (TryKlasor(e.Args, out var openPeer, out var openShare))
             _ = OpenFolderRequest(openPeer, openShare);
     }
@@ -126,6 +138,21 @@ public partial class App : Application
         try { _node?.Dispose(); } catch { /* kapanış */ }
         try { _tray?.Dispose(); } catch { /* kapanış */ }
         base.OnExit(e);
+    }
+
+    public void ShowFiles(string? peerId = null, string? peerName = null, string? shareId = null, string? shareName = null)
+    {
+        if (_files == null)
+        {
+            _files = new FilesWindow();
+            _files.Closed += (_, _) => _files = null;
+        }
+        if (_files.WindowState == WindowState.Minimized)
+            _files.WindowState = WindowState.Normal;
+        _files.Show();
+        _files.Activate();
+        if (!string.IsNullOrEmpty(peerId) && !string.IsNullOrEmpty(shareId))
+            _files.OpenShare(peerId, peerName ?? "", shareId, shareName ?? "");
     }
 
     public void ShowShare()
@@ -299,6 +326,11 @@ public partial class App : Application
                     Dispatcher.BeginInvoke(() => ShowChat());
                     continue;
                 }
+                if (text == "paylasilan")
+                {
+                    Dispatcher.BeginInvoke(() => ShowFiles());
+                    continue;
+                }
                 var parts = text.Split('\t');
                 if (parts.Length == 2)
                     Dispatcher.BeginInvoke(() => _ = OpenFolderRequest(parts[0], parts[1]));
@@ -323,6 +355,9 @@ public partial class App : Application
             await Task.Delay(500);
         }
     }
+
+    static bool HasFlag(string[] args, string name) =>
+        args.Any(arg => string.Equals(arg, name, StringComparison.OrdinalIgnoreCase));
 
     static bool TryKlasor(string[] args, out string peerId, out string shareId)
     {

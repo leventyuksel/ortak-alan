@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace OrtakAlan;
@@ -24,7 +25,12 @@ static class WindowsShareService
             };
             var result = NetShareAdd(null, 2, ref info, out _);
             if (result == 0 || result == 2118)
+            {
+                GrantShare(share);
+                var folder = path;
+                Task.Run(() => GrantNtfs(folder));
                 return (true, share, null);
+            }
             if (result == 5)
                 return (false, null, "Yönetici izni gerekir");
             return (false, null, "Windows paylaşımı açılamadı");
@@ -33,6 +39,32 @@ static class WindowsShareService
         {
             Log.Write(ex);
             return (false, null, "Windows paylaşımı açılamadı");
+        }
+    }
+
+    public static void RefreshAccess(string dataDir, IEnumerable<ShareItem> shares)
+    {
+        foreach (var share in shares)
+        {
+            if (share.Kind != "folder" || string.IsNullOrEmpty(share.WindowsShare) || !Directory.Exists(share.Path))
+                continue;
+            GrantShare(share.WindowsShare);
+            var marker = Path.Combine(dataDir, "izin", share.Id);
+            if (File.Exists(marker)) continue;
+            var path = share.Path;
+            Task.Run(() =>
+            {
+                GrantNtfs(path);
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
+                    File.WriteAllText(marker, "1");
+                }
+                catch (Exception ex)
+                {
+                    Log.Write(ex);
+                }
+            });
         }
     }
 
@@ -101,6 +133,51 @@ static class WindowsShareService
         }
     }
 
+    static void GrantShare(string shareName)
+    {
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptor("D:(A;;FA;;;WD)", 1, out var sd, out _))
+        {
+            if (sd != IntPtr.Zero) LocalFree(sd);
+            Log.Write("Paylaşım izni hazırlanamadı.");
+            return;
+        }
+
+        try
+        {
+            var info = new ShareInfo1501 { SecurityDescriptor = sd };
+            var result = NetShareSetInfo(null, shareName, 1501, ref info, out _);
+            if (result != 0) Log.Write("Paylaşım izni yazılamadı: " + result);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+        }
+        finally
+        {
+            if (sd != IntPtr.Zero) LocalFree(sd);
+        }
+    }
+
+    static void GrantNtfs(string path)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = Path.Combine(Environment.SystemDirectory, "icacls.exe"),
+                Arguments = "\"" + path.Replace("\"", "") + "\" /grant *S-1-1-0:(OI)(CI)M /T /C /Q",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+            process?.WaitForExit(20000);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+        }
+    }
+
     static string SafeName(string name, string id)
     {
         var chars = name.Where(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9').ToArray();
@@ -129,6 +206,22 @@ static class WindowsShareService
 
     [DllImport("Netapi32.dll", CharSet = CharSet.Unicode, EntryPoint = "NetShareDel")]
     static extern int NetShareDel(string? server, string netName, int reserved);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct ShareInfo1501
+    {
+        public IntPtr SecurityDescriptor;
+    }
+
+    [DllImport("Netapi32.dll", CharSet = CharSet.Unicode)]
+    static extern int NetShareSetInfo(string? server, string netName, int level, ref ShareInfo1501 info, out int parmErr);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool ConvertStringSecurityDescriptorToSecurityDescriptor(
+        string descriptor, int revision, out IntPtr security, out uint size);
+
+    [DllImport("kernel32.dll")]
+    static extern IntPtr LocalFree(IntPtr handle);
 
     [DllImport("winspool.drv", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern bool OpenPrinter(string printerName, out IntPtr handle, IntPtr defaults);

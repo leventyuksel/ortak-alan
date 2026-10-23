@@ -11,9 +11,7 @@ static class ShareConnect
             catch (Exception ex) { Log.Write(ex); }
         }
 
-        var window = new BrowseWindow(peer.Id, peer.Name, share.Id, share.Name, share.WindowsShare, peer.Ip);
-        window.Show();
-        window.Activate();
+        App.Me.ShowFiles(peer.Id, peer.Name, share.Id, share.Name);
         return label.Length == 0
             ? peer.Name + " / " + share.Name
             : "Masaüstüne \"" + label + "\" kısayolu kondu.";

@@ -92,4 +92,46 @@ static class UpdateService
             CreateNoWindow = true
         });
     }
+
+    static int _apply;
+
+    public static bool Applying => Volatile.Read(ref _apply) == 1;
+    public static UpdateOffer? Pending { get; private set; }
+    public static event Action? PendingChanged;
+
+    public static async Task LookAsync()
+    {
+        Pending = await CheckAsync();
+        var handler = PendingChanged;
+        if (handler == null) return;
+        foreach (var item in handler.GetInvocationList())
+        {
+            try { ((Action)item)(); }
+            catch (Exception ex) { Log.Write(ex); }
+        }
+    }
+
+    public static async Task<string?> ApplyPendingAsync()
+    {
+        if (Interlocked.CompareExchange(ref _apply, 1, 0) != 0)
+            return "İndiriliyor…";
+        var offer = Pending;
+        if (offer == null)
+        {
+            Interlocked.Exchange(ref _apply, 0);
+            return "Güncelleme yok.";
+        }
+
+        try
+        {
+            await ApplyAsync(offer);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            Interlocked.Exchange(ref _apply, 0);
+            return "Güncelleme indirilemedi.";
+        }
+    }
 }

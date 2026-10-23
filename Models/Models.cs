@@ -186,8 +186,10 @@ public sealed class DirEntry
     public string Name { get; init; } = "";
     public bool IsDir { get; init; }
     public long Size { get; init; }
+    public long Modified { get; init; }
     public string Glyph => IsDir ? "\uE8B7" : "\uE8A5";
     public string SizeText => IsDir ? "Klasör" : Format(Size);
+    public string WhenText => Modified <= 0 ? "" : new DateTime(Modified, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy HH:mm");
 
     static string Format(long size)
     {

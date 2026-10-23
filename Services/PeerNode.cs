@@ -121,19 +121,24 @@ public sealed class PeerNode : IDisposable
                 {
                     Name = Str(item, "name"),
                     IsDir = item.TryGetProperty("dir", out var dir) && dir.ValueKind == JsonValueKind.True,
-                    Size = item.TryGetProperty("size", out var size) && size.TryGetInt64(out var n) ? n : 0
+                    Size = item.TryGetProperty("size", out var size) && size.TryGetInt64(out var n) ? n : 0,
+                    Modified = item.TryGetProperty("mtime", out var mt) && mt.TryGetInt64(out var ticks) ? ticks : 0
                 });
             }
         }
         return (null, entries);
     }
 
-    public async Task<(string? Error, string? Path)> DownloadAsync(string peerId, string shareId, string rel, string fileName)
+    public Task<(string? Error, string? Path)> DownloadAsync(string peerId, string shareId, string rel, string fileName) =>
+        DownloadToAsync(peerId, shareId, rel, fileName, null);
+
+    public async Task<(string? Error, string? Path)> DownloadToAsync(string peerId, string shareId, string rel, string fileName, string? destination)
     {
         var (link, error) = await EnsureAsync(peerId);
         if (link == null) return (error, null);
         var id = Guid.NewGuid().ToString("N");
-        var destination = UniqueDownload(fileName);
+        destination ??= UniqueDownload(fileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         var waiter = new DownloadWait { FinalPath = destination };
         link.Downloads[id] = waiter;
         await link.Send(Obj(("t", "get-file"), ("id", id), ("share", shareId), ("rel", rel)));
@@ -147,6 +152,84 @@ public sealed class PeerNode : IDisposable
         {
             Log.Write(ex);
             return ("Dosya alınamadı", null);
+        }
+    }
+
+    public Task<string?> MakeDirAsync(string peerId, string shareId, string rel, string name) =>
+        FsAsync(peerId, Obj(("t", "mkdir"), ("share", shareId), ("rel", rel), ("name", name)));
+
+    public Task<string?> DeleteAsync(string peerId, string shareId, string rel) =>
+        FsAsync(peerId, Obj(("t", "delete"), ("share", shareId), ("rel", rel)));
+
+    public Task<string?> RenameAsync(string peerId, string shareId, string rel, string name) =>
+        FsAsync(peerId, Obj(("t", "rename"), ("share", shareId), ("rel", rel), ("name", name)));
+
+    public Task<string?> CopyAsync(string peerId, string shareId, string rel, string to) =>
+        FsAsync(peerId, Obj(("t", "copy"), ("share", shareId), ("rel", rel), ("to", to)));
+
+    public Task<string?> MoveAsync(string peerId, string shareId, string rel, string to) =>
+        FsAsync(peerId, Obj(("t", "move"), ("share", shareId), ("rel", rel), ("to", to)));
+
+    public async Task<string?> UploadAsync(string peerId, string shareId, string rel, string path)
+    {
+        if (!File.Exists(path)) return "Dosya bulunamadı";
+        var info = new FileInfo(path);
+        if (info.Length > MaxFileBytes) return "Dosya 150 MB sınırını aşıyor";
+        var (link, error) = await EnsureAsync(peerId);
+        if (link == null) return error;
+
+        var id = Guid.NewGuid().ToString("N");
+        var waiter = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        link.Pending[id] = waiter;
+        await link.Send(Obj(("t", "put-begin"), ("id", id), ("share", shareId), ("rel", rel), ("name", info.Name), ("size", info.Length)));
+        if (waiter.Task.IsCompleted) return await ReadFs(waiter, TimeSpan.FromSeconds(5), link, id);
+
+        await using var stream = File.OpenRead(path);
+        var buffer = new byte[64 * 1024];
+        var index = 0;
+        int read;
+        while ((read = await stream.ReadAsync(buffer, _cts.Token)) > 0)
+        {
+            if (waiter.Task.IsCompleted) return await ReadFs(waiter, TimeSpan.FromSeconds(5), link, id);
+            var slice = new byte[read];
+            Buffer.BlockCopy(buffer, 0, slice, 0, read);
+            await link.Send(Obj(("t", "file-chunk"), ("id", id), ("i", index++), ("data", Convert.ToBase64String(slice))));
+        }
+        await link.Send(Obj(("t", "file-end"), ("id", id)));
+        var minutes = Math.Clamp((int)(info.Length / (1024 * 1024)) + 1, 1, 10);
+        return await ReadFs(waiter, TimeSpan.FromMinutes(minutes), link, id);
+    }
+
+    async Task<string?> FsAsync(string peerId, JsonObject body)
+    {
+        var (link, error) = await EnsureAsync(peerId);
+        if (link == null) return error;
+        var req = Guid.NewGuid().ToString("N");
+        body["req"] = req;
+        var waiter = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        link.Pending[req] = waiter;
+        await link.Send(body);
+        return await ReadFs(waiter, TimeSpan.FromSeconds(60), link, req);
+    }
+
+    static async Task<string?> ReadFs(TaskCompletionSource<JsonElement> waiter, TimeSpan timeout, Link link, string req)
+    {
+        var finished = await Task.WhenAny(waiter.Task, Task.Delay(timeout));
+        if (finished != waiter.Task)
+        {
+            link.Pending.TryRemove(req, out _);
+            return "Yanıt gelmedi";
+        }
+        try
+        {
+            var message = await waiter.Task;
+            var problem = Str(message, "error");
+            return problem.Length == 0 ? null : problem;
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            return "Bağlantı koptu";
         }
     }
 
@@ -344,7 +427,7 @@ public sealed class PeerNode : IDisposable
     {
         var kind = Str(message, "t");
         var req = Str(message, "req");
-        if (req.Length > 0 && kind == "dir" && link.Pending.TryRemove(req, out var waiter))
+        if (req.Length > 0 && (kind is "dir" or "fs") && link.Pending.TryRemove(req, out var waiter))
         {
             waiter.TrySetResult(message);
             return;
@@ -361,6 +444,24 @@ public sealed class PeerNode : IDisposable
             case "get-file":
                 await ReplyFile(link, message);
                 break;
+            case "mkdir":
+                await ReplyMkdir(link, message);
+                break;
+            case "delete":
+                await ReplyDelete(link, message);
+                break;
+            case "rename":
+                await ReplyRename(link, message);
+                break;
+            case "copy":
+                await ReplyCopy(link, message);
+                break;
+            case "move":
+                await ReplyMove(link, message);
+                break;
+            case "put-begin":
+                await BeginPut(link, message);
+                break;
             case "file-begin":
                 BeginIncoming(link, message);
                 break;
@@ -368,10 +469,10 @@ public sealed class PeerNode : IDisposable
                 WriteChunk(link, message);
                 break;
             case "file-end":
-                FinishIncoming(link, Str(message, "id"), null);
+                await FinishIncoming(link, Str(message, "id"), null);
                 break;
             case "file-error":
-                FinishIncoming(link, Str(message, "id"), Str(message, "error"));
+                await FinishIncoming(link, Str(message, "id"), Str(message, "error"));
                 break;
         }
     }
@@ -393,16 +494,17 @@ public sealed class PeerNode : IDisposable
             return;
         }
 
-        foreach (var dir in Directory.EnumerateDirectories(full).Take(300))
+        foreach (var dir in Directory.EnumerateDirectories(full).Take(2000))
         {
             entries.Add(new JsonObject
             {
                 ["name"] = Path.GetFileName(dir),
                 ["dir"] = true,
-                ["size"] = 0
+                ["size"] = 0,
+                ["mtime"] = Directory.GetLastWriteTimeUtc(dir).Ticks
             });
         }
-        foreach (var file in Directory.EnumerateFiles(full).Take(300))
+        foreach (var file in Directory.EnumerateFiles(full).Take(2000))
         {
             var name = Path.GetFileName(file);
             if (name.StartsWith('.')) continue;
@@ -410,7 +512,8 @@ public sealed class PeerNode : IDisposable
             {
                 ["name"] = name,
                 ["dir"] = false,
-                ["size"] = new FileInfo(file).Length
+                ["size"] = new FileInfo(file).Length,
+                ["mtime"] = File.GetLastWriteTimeUtc(file).Ticks
             });
         }
 
@@ -458,14 +561,14 @@ public sealed class PeerNode : IDisposable
         var name = Path.GetFileName(Str(message, "name"));
         if (!SafeFileName(name))
         {
-            FinishIncoming(link, id, "Dosya adı geçersiz");
+            _ = FinishIncoming(link, id, "Dosya adı geçersiz");
             return;
         }
 
         var size = message.TryGetProperty("size", out var sizeEl) && sizeEl.TryGetInt64(out var n) ? n : 0;
         if (size > MaxFileBytes)
         {
-            FinishIncoming(link, id, "Dosya 150 MB sınırını aşıyor");
+            _ = FinishIncoming(link, id, "Dosya 150 MB sınırını aşıyor");
             return;
         }
 
@@ -499,7 +602,7 @@ public sealed class PeerNode : IDisposable
         }
     }
 
-    void FinishIncoming(Link link, string id, string? error)
+    async Task FinishIncoming(Link link, string id, string? error)
     {
         if (!link.Incoming.TryRemove(id, out var transfer))
         {
@@ -512,18 +615,56 @@ public sealed class PeerNode : IDisposable
         if (!string.IsNullOrEmpty(error))
         {
             try { if (File.Exists(transfer.Temp)) File.Delete(transfer.Temp); } catch { /* kapanış */ }
-            transfer.Waiter?.Done.TrySetException(new IOException(error));
+            if (transfer.DestPath != null)
+                await SendFs(link, id, error);
+            else
+                transfer.Waiter?.Done.TrySetException(new IOException(error));
             return;
         }
 
-        var finalPath = transfer.Waiter?.FinalPath ?? UniqueDownload(transfer.Name);
-        Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
-        if (File.Exists(finalPath)) File.Delete(finalPath);
-        File.Move(transfer.Temp, finalPath);
+        if (transfer.DestPath != null)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(transfer.DestPath)!);
+                if (File.Exists(transfer.DestPath)) File.Delete(transfer.DestPath);
+                File.Move(transfer.Temp, transfer.DestPath);
+                await SendFs(link, id, null);
+            }
+            catch (Exception ex)
+            {
+                Log.Write(ex);
+                try { if (File.Exists(transfer.Temp)) File.Delete(transfer.Temp); } catch { /* kapanış */ }
+                await SendFs(link, id, "Dosya yazılamadı");
+            }
+            return;
+        }
+
         if (transfer.Waiter != null)
+        {
+            var finalPath = transfer.Waiter.FinalPath;
+            Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
+            if (File.Exists(finalPath)) File.Delete(finalPath);
+            File.Move(transfer.Temp, finalPath);
             transfer.Waiter.Done.TrySetResult(finalPath);
-        else
-            Ui(() => FileReceived?.Invoke(new IncomingFile(link.PeerId, link.PeerName, transfer.Name, finalPath)));
+            return;
+        }
+
+        string saved;
+        try
+        {
+            saved = SharedFiles.TakeIncoming(transfer.Temp, link.PeerName, transfer.Name);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            saved = UniqueDownload(transfer.Name);
+            Directory.CreateDirectory(Path.GetDirectoryName(saved)!);
+            if (File.Exists(saved)) File.Delete(saved);
+            File.Move(transfer.Temp, saved);
+        }
+        var received = saved;
+        Ui(() => FileReceived?.Invoke(new IncomingFile(link.PeerId, link.PeerName, transfer.Name, received)));
     }
 
     bool TryResolve(string shareId, string rel, bool wantFile, out string full, out string? error)
@@ -558,6 +699,256 @@ public sealed class PeerNode : IDisposable
         full = combined;
         return true;
     }
+
+    async Task ReplyMkdir(Link link, JsonElement message)
+    {
+        var req = Str(message, "req");
+        var name = Path.GetFileName(Str(message, "name"));
+        if (!SafeFileName(name))
+        {
+            await SendFs(link, req, "Ad geçersiz");
+            return;
+        }
+        if (!TryResolve(Str(message, "share"), ChildRel(Str(message, "rel"), name), false, out var full, out var error))
+        {
+            await SendFs(link, req, error ?? "Paylaşım yok");
+            return;
+        }
+        try
+        {
+            if (File.Exists(full))
+            {
+                await SendFs(link, req, "Bu ad kullanılıyor");
+                return;
+            }
+            Directory.CreateDirectory(full);
+            await SendFs(link, req, null);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            await SendFs(link, req, "Klasör oluşturulamadı");
+        }
+    }
+
+    async Task ReplyDelete(Link link, JsonElement message)
+    {
+        var req = Str(message, "req");
+        var rel = Str(message, "rel");
+        if (string.IsNullOrEmpty(rel))
+        {
+            await SendFs(link, req, "Kök silinemez");
+            return;
+        }
+        if (!TryResolve(Str(message, "share"), rel, false, out var full, out var error))
+        {
+            await SendFs(link, req, error ?? "Paylaşım yok");
+            return;
+        }
+        try
+        {
+            if (Directory.Exists(full)) Directory.Delete(full, true);
+            else if (File.Exists(full)) File.Delete(full);
+            else
+            {
+                await SendFs(link, req, "Bulunamadı");
+                return;
+            }
+            await SendFs(link, req, null);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            await SendFs(link, req, "Silinemedi");
+        }
+    }
+
+    async Task ReplyRename(Link link, JsonElement message)
+    {
+        var req = Str(message, "req");
+        var rel = Str(message, "rel");
+        var name = Path.GetFileName(Str(message, "name"));
+        if (string.IsNullOrEmpty(rel) || !SafeFileName(name))
+        {
+            await SendFs(link, req, "Ad geçersiz");
+            return;
+        }
+        if (!TryResolve(Str(message, "share"), rel, false, out var full, out var error))
+        {
+            await SendFs(link, req, error ?? "Paylaşım yok");
+            return;
+        }
+        if (!TryResolve(Str(message, "share"), ChildRel(ParentRel(rel), name), false, out var dest, out error))
+        {
+            await SendFs(link, req, error ?? "Geçersiz yol");
+            return;
+        }
+        await MovePath(link, req, full, dest);
+    }
+
+    async Task ReplyCopy(Link link, JsonElement message)
+    {
+        var req = Str(message, "req");
+        if (!TryPair(message, out var full, out var dest, out var error))
+        {
+            await SendFs(link, req, error ?? "Geçersiz yol");
+            return;
+        }
+        if (IsInside(full, dest))
+        {
+            await SendFs(link, req, "Klasör kendi içine kopyalanamaz");
+            return;
+        }
+        try
+        {
+            if (Directory.Exists(full)) CopyTree(full, dest);
+            else if (File.Exists(full))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                File.Copy(full, dest, true);
+            }
+            else
+            {
+                await SendFs(link, req, "Bulunamadı");
+                return;
+            }
+            await SendFs(link, req, null);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            await SendFs(link, req, "Kopyalanamadı");
+        }
+    }
+
+    async Task ReplyMove(Link link, JsonElement message)
+    {
+        var req = Str(message, "req");
+        if (!TryPair(message, out var full, out var dest, out var error))
+        {
+            await SendFs(link, req, error ?? "Geçersiz yol");
+            return;
+        }
+        if (IsInside(full, dest))
+        {
+            await SendFs(link, req, "Klasör kendi içine taşınamaz");
+            return;
+        }
+        await MovePath(link, req, full, dest);
+    }
+
+    async Task BeginPut(Link link, JsonElement message)
+    {
+        var id = Str(message, "id");
+        var name = Path.GetFileName(Str(message, "name"));
+        if (!SafeFileName(name))
+        {
+            await SendFs(link, id, "Dosya adı geçersiz");
+            return;
+        }
+        var size = message.TryGetProperty("size", out var sizeEl) && sizeEl.TryGetInt64(out var n) ? n : 0;
+        if (size > MaxFileBytes)
+        {
+            await SendFs(link, id, "Dosya 150 MB sınırını aşıyor");
+            return;
+        }
+        if (!TryResolve(Str(message, "share"), ChildRel(Str(message, "rel"), name), false, out var dest, out var error))
+        {
+            await SendFs(link, id, error ?? "Paylaşım yok");
+            return;
+        }
+        var parent = Path.GetDirectoryName(dest);
+        if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent))
+        {
+            await SendFs(link, id, "Klasör bulunamadı");
+            return;
+        }
+        var temp = Path.Combine(Path.GetTempPath(), "ortakalan-" + id);
+        link.Incoming[id] = new IncomingTransfer
+        {
+            Name = name,
+            Temp = temp,
+            Stream = File.Create(temp),
+            DestPath = dest
+        };
+    }
+
+    async Task MovePath(Link link, string req, string full, string dest)
+    {
+        try
+        {
+            if (string.Equals(full, dest, StringComparison.OrdinalIgnoreCase))
+            {
+                await SendFs(link, req, null);
+                return;
+            }
+            if (File.Exists(dest) || Directory.Exists(dest))
+            {
+                await SendFs(link, req, "Bu ad kullanılıyor");
+                return;
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            if (Directory.Exists(full)) Directory.Move(full, dest);
+            else if (File.Exists(full)) File.Move(full, dest);
+            else
+            {
+                await SendFs(link, req, "Bulunamadı");
+                return;
+            }
+            await SendFs(link, req, null);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            await SendFs(link, req, "Taşınamadı");
+        }
+    }
+
+    bool TryPair(JsonElement message, out string full, out string dest, out string? error)
+    {
+        dest = "";
+        var share = Str(message, "share");
+        var rel = Str(message, "rel");
+        var to = Str(message, "to");
+        if (string.IsNullOrEmpty(rel) || string.IsNullOrEmpty(to))
+        {
+            full = "";
+            error = "Geçersiz yol";
+            return false;
+        }
+        if (!TryResolve(share, rel, false, out full, out error)) return false;
+        return TryResolve(share, to, false, out dest, out error);
+    }
+
+    static bool IsInside(string source, string dest)
+    {
+        var root = source.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var full = dest.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return full.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(source, dest, StringComparison.OrdinalIgnoreCase);
+    }
+
+    static void CopyTree(string source, string dest)
+    {
+        Directory.CreateDirectory(dest);
+        foreach (var file in Directory.EnumerateFiles(source))
+            File.Copy(file, Path.Combine(dest, Path.GetFileName(file)), true);
+        foreach (var dir in Directory.EnumerateDirectories(source))
+            CopyTree(dir, Path.Combine(dest, Path.GetFileName(dir)));
+    }
+
+    static string ChildRel(string rel, string name) => string.IsNullOrEmpty(rel) ? name : rel + "/" + name;
+
+    static string ParentRel(string rel)
+    {
+        var slash = rel.LastIndexOf('/');
+        return slash < 0 ? "" : rel[..slash];
+    }
+
+    static Task SendFs(Link link, string req, string? error) =>
+        link.Send(error == null
+            ? Obj(("t", "fs"), ("req", req))
+            : Obj(("t", "fs"), ("req", req), ("error", error)));
 
     void StartUdp()
     {
@@ -868,6 +1259,7 @@ public sealed class PeerNode : IDisposable
     {
         public string Name = "";
         public string Temp = "";
+        public string? DestPath;
         public FileStream? Stream;
         public DownloadWait? Waiter;
     }

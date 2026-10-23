@@ -13,6 +13,8 @@ static class CommandBus
 
     public static bool ShowChat() => Write("sohbet");
 
+    public static bool ShowFiles() => Write("paylasilan");
+
     static bool Write(string text)
     {
         try

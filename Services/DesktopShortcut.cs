@@ -4,24 +4,22 @@ static class DesktopShortcut
 {
     public static void Ensure(bool refresh)
     {
+        _ = refresh;
         try
         {
             var exe = AppInfo.PreferredExe();
             if (string.IsNullOrWhiteSpace(exe) || !File.Exists(exe)) return;
             var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            var link = Path.Combine(desktop, "Ortak Alan.lnk");
-            if (!refresh && File.Exists(link))
-                refresh = true;
-
-            var type = Type.GetTypeFromProgID("WScript.Shell");
-            if (type == null) return;
-            dynamic shell = Activator.CreateInstance(type)!;
-            dynamic shortcut = shell.CreateShortcut(link);
-            shortcut.TargetPath = exe;
-            shortcut.WorkingDirectory = Path.GetDirectoryName(exe);
-            shortcut.IconLocation = exe + ",0";
-            shortcut.Description = "Ortak Alan";
-            shortcut.Save();
+            var work = Path.GetDirectoryName(exe);
+            Write(Path.Combine(desktop, "Ortak Alan.lnk"), exe, "", work, exe + ",0", "Ortak Alan");
+            var icon = Path.Combine(Environment.SystemDirectory, "shell32.dll") + ",4";
+            Write(
+                Path.Combine(desktop, "Paylaşılan Dosyalar.lnk"),
+                exe,
+                "--paylasilan",
+                work,
+                icon,
+                "Ağdaki paylaşılan dosyalar");
         }
         catch (Exception ex)
         {
@@ -34,17 +32,31 @@ static class DesktopShortcut
         var exe = Environment.ProcessPath ?? "";
         var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         var label = Clean(person) + " - " + Clean(folder);
-        var link = Path.Combine(desktop, label + ".lnk");
-        var type = Type.GetTypeFromProgID("WScript.Shell");
-        if (type == null || exe.Length == 0) return label;
-        dynamic shell = Activator.CreateInstance(type)!;
-        dynamic shortcut = shell.CreateShortcut(link);
-        shortcut.TargetPath = exe;
-        shortcut.Arguments = "--klasor \"" + peerId + "\" \"" + shareId + "\"";
-        shortcut.WorkingDirectory = Path.GetDirectoryName(exe);
-        shortcut.Description = person + " / " + folder;
-        shortcut.Save();
+        if (exe.Length == 0) return label;
+        Write(
+            Path.Combine(desktop, label + ".lnk"),
+            exe,
+            "--klasor \"" + peerId + "\" \"" + shareId + "\"",
+            Path.GetDirectoryName(exe),
+            exe + ",0",
+            person + " / " + folder);
         return label;
+    }
+
+    public static void Write(string linkPath, string target, string? arguments, string? workingDirectory, string? icon, string description)
+    {
+        var type = Type.GetTypeFromProgID("WScript.Shell");
+        if (type == null) return;
+        dynamic shell = Activator.CreateInstance(type)!;
+        dynamic shortcut = shell.CreateShortcut(linkPath);
+        shortcut.TargetPath = target;
+        shortcut.Arguments = arguments ?? "";
+        if (!string.IsNullOrWhiteSpace(workingDirectory))
+            shortcut.WorkingDirectory = workingDirectory;
+        if (!string.IsNullOrWhiteSpace(icon))
+            shortcut.IconLocation = icon;
+        shortcut.Description = description ?? "";
+        shortcut.Save();
     }
 
     static string Clean(string value)

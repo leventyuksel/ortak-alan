@@ -33,7 +33,9 @@
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="Ortak Alan" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center"/>
               <TextBlock x:Name="VersionText" Margin="8,1,0,0" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
-              <Button x:Name="UpdateButton" Content="Güncelle" Visibility="Collapsed" Style="{StaticResource GhostButton}" Margin="4,0,0,0" Padding="8,2" MinHeight="26" Click="Update_Click"/>
+              <Button x:Name="UpdateButton" Visibility="Collapsed" Style="{StaticResource GhostButton}" Margin="6,0,0,0" Padding="2,0" MinWidth="22" MinHeight="22" ToolTip="Güncelleme var" Click="Update_Click" Cursor="Hand">
+                <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+              </Button>
             </StackPanel>
             <TextBlock x:Name="SelfName" Foreground="{DynamicResource Muted}" FontSize="12"/>
           </StackPanel>
@@ -151,21 +153,36 @@
                         </TextBlock.Style>
                       </TextBlock>
                     </Border>
-                    <Border MaxWidth="280" BorderBrush="{DynamicResource Line}" BorderThickness="1" Background="{DynamicResource Paper}" CornerRadius="10" Padding="10,8" Margin="0,2" Visibility="{Binding IsFile, Converter={StaticResource BoolVis}}" HorizontalAlignment="{Binding Mine, Converter={StaticResource MineAlign}}">
-                      <Grid>
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="Auto"/>
-                          <ColumnDefinition Width="*"/>
-                          <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                        <StackPanel Grid.Column="1">
-                          <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Ink}"/>
-                          <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Muted}"/>
-                        </StackPanel>
-                        <Button Grid.Column="2" Content="Aç" Style="{StaticResource GhostButton}" Padding="8,4" MinHeight="28" Click="OpenFile_Click"/>
-                      </Grid>
-                    </Border>
+                    <Button MaxWidth="280" Margin="0,2" Padding="0" Cursor="Hand" ToolTip="Dosyayı aç"
+                            Visibility="{Binding IsFile, Converter={StaticResource BoolVis}}"
+                            HorizontalAlignment="{Binding Mine, Converter={StaticResource MineAlign}}"
+                            HorizontalContentAlignment="Stretch"
+                            Click="OpenFile_Click">
+                      <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                          <Border x:Name="card" BorderBrush="{DynamicResource Line}" BorderThickness="1" Background="{DynamicResource Paper}" CornerRadius="10" Padding="10,8">
+                            <Grid>
+                              <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                              </Grid.ColumnDefinitions>
+                              <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource Ink}"/>
+                              <StackPanel Grid.Column="1">
+                                <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Ink}"/>
+                                <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Muted}"/>
+                              </StackPanel>
+                              <TextBlock Grid.Column="2" Text="Aç" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Accent}" FontSize="12"/>
+                            </Grid>
+                          </Border>
+                          <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                              <Setter TargetName="card" Property="Background" Value="{DynamicResource Wash}"/>
+                            </Trigger>
+                          </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                      </Button.Template>
+                    </Button>
                   </StackPanel>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>

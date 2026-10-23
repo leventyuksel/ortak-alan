@@ -14,7 +14,6 @@ public partial class ChatWindow : ChromeWindow
 {
     ObservableCollection<ChatLine>? _lines;
     bool _busy;
-    UpdateOffer? _offer;
     public string? SelectedId { get; private set; }
     readonly List<SwatchVm> _swatches = new();
 
@@ -27,7 +26,9 @@ public partial class ChatWindow : ChromeWindow
         DockRight();
         SelfName.Text = App.Me.Settings.ComputerName;
         VersionText.Text = AppInfo.Display;
-        Loaded += async (_, _) => await LookForUpdate();
+        UpdateService.PendingChanged += ShowUpdateIcon;
+        Closed += (_, _) => UpdateService.PendingChanged -= ShowUpdateIcon;
+        ShowUpdateIcon();
         PeerList.ItemsSource = App.Me.Directory.Peers;
         Title = "Ortak Alan — " + App.Me.Settings.ComputerName;
         App.Me.Directory.Changed += RefreshPeers;
@@ -273,33 +274,34 @@ public partial class ChatWindow : ChromeWindow
         }
     }
 
-    async Task LookForUpdate()
+    void ShowUpdateIcon()
     {
-        _offer = await UpdateService.CheckAsync();
-        if (_offer == null) return;
-        UpdateButton.Content = "Güncelle " + _offer.Version.ToString(3);
-        UpdateButton.Visibility = Visibility.Visible;
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(ShowUpdateIcon);
+            return;
+        }
+
+        var offer = UpdateService.Pending;
+        UpdateButton.Visibility = offer == null ? Visibility.Collapsed : Visibility.Visible;
+        UpdateButton.IsEnabled = offer != null && !UpdateService.Applying;
+        UpdateButton.ToolTip = offer == null ? null : "Sürüm " + offer.Version.ToString(3) + " — kurmak için tıklayın";
     }
 
     async void Update_Click(object sender, RoutedEventArgs e)
     {
-        if (_offer == null || _busy) return;
-        _busy = true;
+        if (UpdateService.Pending == null || UpdateService.Applying) return;
         UpdateButton.IsEnabled = false;
-        UpdateButton.Content = "İndiriliyor…";
-        try
+        UpdateButton.ToolTip = "İndiriliyor…";
+        var error = await UpdateService.ApplyPendingAsync();
+        if (error == null)
         {
-            await UpdateService.ApplyAsync(_offer);
             App.Me.ExitApp();
+            return;
         }
-        catch (Exception ex)
-        {
-            Log.Write(ex);
-            _busy = false;
-            UpdateButton.IsEnabled = true;
-            UpdateButton.Content = "Güncelle " + _offer.Version.ToString(3);
-            StatusText.Text = "Güncelleme indirilemedi.";
-        }
+
+        StatusText.Text = error;
+        ShowUpdateIcon();
     }
 
     void Screen_Click(object sender, RoutedEventArgs e)
@@ -388,14 +390,49 @@ public partial class ChatWindow : ChromeWindow
 
     void OpenFile_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement element || element.DataContext is not ChatLine line) return;
+        if (LineOf(sender) is not ChatLine line) return;
         var path = line.FilePath;
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            path = SharedFiles.FindIncoming(line.FileName ?? "");
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
         {
             StatusText.Text = "Dosya bulunamadı.";
             return;
         }
-        Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+
+        if (!string.Equals(line.FilePath, path, StringComparison.OrdinalIgnoreCase))
+        {
+            line.FilePath = path;
+            if (SelectedId != null) App.Me.Chats.Save(SelectedId);
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true,
+                WorkingDirectory = Path.GetDirectoryName(path) ?? ""
+            });
+            StatusText.Text = "";
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            StatusText.Text = "Dosya açılamadı.";
+        }
+    }
+
+    static ChatLine? LineOf(object sender)
+    {
+        var current = sender as DependencyObject;
+        while (current != null)
+        {
+            if (current is FrameworkElement element && element.DataContext is ChatLine line)
+                return line;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
     }
 
     protected override void OnClosing(CancelEventArgs e)
