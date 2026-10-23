@@ -20,6 +20,7 @@ public partial class ThemeWindow : ChromeWindow
             {
                 Name = theme.Name,
                 Color = new SolidColorBrush(theme.Color),
+                Mark = new SolidColorBrush(ThemeService.On(theme.Color)),
                 Selected = theme.Name == _chosen
             });
         }
@@ -59,7 +60,9 @@ public partial class ThemeWindow : ChromeWindow
 public sealed class SwatchVm : Observable
 {
     public string Name { get; init; } = "";
-    public Brush Color { get; init; } = Brushes.Navy;
+    Brush _color = Brushes.Navy;
+    public Brush Color { get => _color; set => Set(ref _color, value); }
+    public Brush Mark { get; init; } = Brushes.White;
     bool _selected;
     public bool Selected { get => _selected; set => Set(ref _selected, value); }
 }

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -13,7 +14,10 @@ namespace OrtakAlan.Views;
 public partial class ChatWindow : ChromeWindow
 {
     ObservableCollection<ChatLine>? _lines;
+    ListCollectionView? _messageView;
+    readonly ListCollectionView _people;
     bool _busy;
+    bool _holdSelection;
     public string? SelectedId { get; private set; }
 
     public ChatWindow()
@@ -28,7 +32,14 @@ public partial class ChatWindow : ChromeWindow
         UpdateService.PendingChanged += ShowUpdateIcon;
         Closed += (_, _) => UpdateService.PendingChanged -= ShowUpdateIcon;
         ShowUpdateIcon();
-        PeerList.ItemsSource = App.Me.Directory.Peers;
+        _people = new ListCollectionView(App.Me.Directory.Peers);
+        _people.Filter = FilterPerson;
+        _people.SortDescriptions.Add(new SortDescription(nameof(PeerVm.Online), ListSortDirection.Descending));
+        _people.SortDescriptions.Add(new SortDescription(nameof(PeerVm.Name), ListSortDirection.Ascending));
+        _people.LiveSortingProperties.Add(nameof(PeerVm.Online));
+        _people.LiveSortingProperties.Add(nameof(PeerVm.Name));
+        _people.IsLiveSorting = true;
+        PeerList.ItemsSource = _people;
         Title = "Ortak Alan — " + App.Me.Settings.ComputerName;
         App.Me.Directory.Changed += RefreshPeers;
         RefreshPeers();
@@ -55,15 +66,88 @@ public partial class ChatWindow : ChromeWindow
     void RefreshPeers()
     {
         OnlineText.Text = App.Me.Directory.OnlineCount + " çevrimiçi";
-        EmptyPeers.Visibility = App.Me.Directory.Peers.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (SelectedId == null) return;
+        UpdatePeopleEmpty();
+        if (SelectedId == null || SelectedId == RoomChat.Id) return;
         var peer = App.Me.Directory.Peers.FirstOrDefault(p => p.Id == SelectedId);
         if (peer != null) PeerTitle.Text = peer.Name;
     }
 
+    void UpdatePeopleEmpty()
+    {
+        var query = PersonSearch.Text.Trim();
+        var any = _people.Cast<object>().Any();
+        EmptyPeers.Text = query.Length == 0 ? "Henüz kimse yok." : "Eşleşen kişi yok.";
+        EmptyPeers.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    bool FilterPerson(object item)
+    {
+        if (item is not PeerVm peer) return false;
+        var query = PersonSearch.Text.Trim();
+        return query.Length == 0 || peer.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    void PersonSearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        PersonHint.Visibility = PersonSearch.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        _people.Refresh();
+        UpdatePeopleEmpty();
+    }
+
+    void ChatSearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        ChatHint.Visibility = ChatSearch.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        _messageView?.Refresh();
+        UpdateChatEmpty();
+    }
+
+    bool FilterLine(object item)
+    {
+        if (item is not ChatLine line) return false;
+        var query = ChatSearch.Text.Trim();
+        if (query.Length == 0) return true;
+        return line.Text.Contains(query, StringComparison.CurrentCultureIgnoreCase)
+            || line.Author.Contains(query, StringComparison.CurrentCultureIgnoreCase)
+            || (line.FileName?.Contains(query, StringComparison.CurrentCultureIgnoreCase) ?? false);
+    }
+
+    void UpdateChatEmpty()
+    {
+        if (SelectedId == null)
+        {
+            EmptyChat.Text = "Bir konuşma seçin.";
+            EmptyChat.Visibility = Visibility.Visible;
+            return;
+        }
+        var any = _messageView?.Cast<object>().Any() ?? false;
+        var query = ChatSearch.Text.Trim();
+        EmptyChat.Text = "Eşleşen mesaj yok.";
+        EmptyChat.Visibility = !any && query.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void Room_Click(object sender, MouseButtonEventArgs e)
+    {
+        _holdSelection = true;
+        PeerList.SelectedItem = null;
+        _holdSelection = false;
+        MarkRoom(true);
+        Bind(RoomChat.Id, RoomChat.Title);
+        StatusText.Text = "Buraya yazılanı ağdaki herkes görür. Dosyaya tıklayınca alınır.";
+        e.Handled = true;
+    }
+
+    void MarkRoom(bool on)
+    {
+        RoomCard.BorderThickness = new Thickness(1.5);
+        RoomCard.Background = new SolidColorBrush(on
+            ? Color.FromArgb(235, 0x0C, 0x3E, 0x48)
+            : Color.FromArgb(210, 0x08, 0x24, 0x2C));
+    }
+
     async void PeerList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (PeerList.SelectedItem is not PeerVm peer) return;
+        if (_holdSelection || PeerList.SelectedItem is not PeerVm peer) return;
+        MarkRoom(false);
         Bind(peer.Id, peer.Name);
         await RequestApproval(peer);
     }
@@ -72,7 +156,7 @@ public partial class ChatWindow : ChromeWindow
     {
         if (!peer.Online)
         {
-            StatusText.Text = "Çevrimdışı. Onay isteği gönderilemedi.";
+            StatusText.Text = "Çevrimdışı. Mesaj açılınca iletilir.";
             return;
         }
 
@@ -124,18 +208,20 @@ public partial class ChatWindow : ChromeWindow
 
     async Task ConnectShare(PeerVm peer, RemoteShareVm share)
     {
-        if (!peer.Online)
-        {
-            StatusText.Text = "Çevrimdışı";
-            return;
-        }
-
         if (share.Kind == "folder")
+        {
+            if (!peer.Online)
+            {
+                StatusText.Text = "Çevrimdışı";
+                return;
+            }
             StatusText.Text = ShareConnect.OpenFolder(peer, share, true);
+        }
         else
         {
-            StatusText.Text = "Yazıcıya bağlanılıyor…";
-            StatusText.Text = await ShareConnect.ConnectPrinter(peer, share);
+            StatusText.Text = "Yazıcılar klasörüne ekleniyor…";
+            var text = await ShareConnect.ConnectPrinter(peer, share, this);
+            if (text.Length > 0) StatusText.Text = text;
         }
     }
 
@@ -168,24 +254,70 @@ public partial class ChatWindow : ChromeWindow
         if (_lines != null) _lines.CollectionChanged -= LinesChanged;
         SelectedId = id;
         PeerTitle.Text = name;
-        EmptyChat.Visibility = Visibility.Collapsed;
         _lines = App.Me.Chats.Get(id);
         _lines.CollectionChanged += LinesChanged;
-        Messages.ItemsSource = _lines;
+        _messageView = new ListCollectionView(_lines);
+        _messageView.Filter = FilterLine;
+        Messages.ItemsSource = _messageView;
         Input.IsEnabled = true;
         SendButton.IsEnabled = true;
         FileButton.IsEnabled = true;
-        StatusText.Text = App.Me.Store.IsApproved(id)
-            ? ""
-            : "İlk mesajda karşı bilgisayardan bir kez izin istenir.";
+        if (id == RoomChat.Id)
+            StatusText.Text = "Buraya yazılanı ağdaki herkes görür. Dosyaya tıklayınca alınır.";
+        else
+        {
+            var peer = App.Me.Directory.Peers.FirstOrDefault(p => p.Id == id);
+            StatusText.Text = peer is { Online: false }
+                ? "Çevrimdışı. Mesaj açılınca iletilir."
+                : App.Me.Store.IsApproved(id) ? "" : "İlk mesajda karşı bilgisayardan bir kez izin istenir.";
+        }
+        UpdateChatEmpty();
         ScrollEnd();
+        _ = MarkSeen();
     }
 
-    void LinesChanged(object? sender, NotifyCollectionChangedEventArgs e) => ScrollEnd();
+    async Task MarkSeen()
+    {
+        if (SelectedId == null || _lines == null) return;
+        var chatId = SelectedId;
+        if (chatId == RoomChat.Id)
+        {
+            var groups = _lines
+                .Where(line => !line.Mine && !line.Seen && line.Id.Length > 0 && line.AuthorId.Length > 0 && line.AuthorId != App.Me.Settings.ComputerId)
+                .GroupBy(line => line.AuthorId)
+                .ToList();
+            var changed = false;
+            foreach (var group in groups)
+            {
+                var error = await App.Me.Node.SendSeenAsync(group.Key, RoomChat.Id, group.Select(line => line.Id).Distinct().ToList());
+                if (error != null || SelectedId != chatId) continue;
+                foreach (var line in group) line.Seen = true;
+                changed = true;
+            }
+            if (changed) App.Me.Chats.Save(RoomChat.Id);
+            return;
+        }
+
+        var pending = _lines.Where(line => !line.Mine && !line.Seen && line.Id.Length > 0).Select(line => line.Id).Distinct().ToList();
+        if (pending.Count == 0) return;
+        var err = await App.Me.Node.SendSeenAsync(chatId, "", pending);
+        if (err != null || SelectedId != chatId) return;
+        foreach (var line in _lines.Where(line => !line.Mine && pending.Contains(line.Id)))
+            line.Seen = true;
+        App.Me.Chats.Save(chatId);
+    }
+
+    void LinesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        ScrollEnd();
+        UpdateChatEmpty();
+        if (e.Action == NotifyCollectionChangedAction.Add)
+            _ = MarkSeen();
+    }
 
     void Transcript_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (SelectedId == null || _lines == null) return;
+        if (SelectedId == null || _lines == null || SelectedId == RoomChat.Id) return;
         var peerId = SelectedId;
         var line = LineOf(e.OriginalSource);
         var menu = new ContextMenu { Placement = PlacementMode.MousePoint };
@@ -230,17 +362,42 @@ public partial class ChatWindow : ChromeWindow
         if (text.Length == 0) return;
         _busy = true;
         Input.Clear();
-        var line = new ChatLine { Mine = true, Text = text, Utc = DateTime.Now };
+        var line = new ChatLine
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Mine = true,
+            AuthorId = App.Me.Settings.ComputerId,
+            Text = text,
+            Utc = DateTime.Now
+        };
         App.Me.Chats.Add(SelectedId, line);
         StatusText.Text = "Gönderiliyor…";
         try
         {
-            var error = await App.Me.Node.SendChatAsync(SelectedId, text);
-            StatusText.Text = error ?? "";
+            var error = SelectedId == RoomChat.Id
+                ? await App.Me.Node.BroadcastRoomAsync(line)
+                : await App.Me.Node.SendChatAsync(SelectedId, text, line.Id);
+            if (error != null)
+            {
+                if (SelectedId != RoomChat.Id) line.Failed = true;
+                line.Status = error;
+                App.Me.Chats.Save(SelectedId);
+                StatusText.Text = error;
+            }
+            else if (SelectedId != RoomChat.Id && App.Me.Node.IsQueued(SelectedId, line.Id))
+            {
+                line.Status = "İletilecek";
+                App.Me.Chats.Save(SelectedId);
+                StatusText.Text = "Mesaj iletilecek. Kişi açılınca gider.";
+            }
+            else StatusText.Text = "";
         }
         catch (Exception ex)
         {
             Log.Write(ex);
+            line.Failed = true;
+            line.Status = "Gönderilemedi";
+            App.Me.Chats.Save(SelectedId);
             StatusText.Text = "Gönderilemedi.";
         }
         finally
@@ -283,7 +440,7 @@ public partial class ChatWindow : ChromeWindow
     {
         if (SelectedId == null)
         {
-            MessageBox.Show(this, "Sohbete göndermek için önce soldan bir kişi seçin.", "Ekran alıntısı");
+            MessageBox.Show(this, "Önce soldan Ortak konuşmayı veya bir kişiyi seçin.", "Ekran alıntısı");
             StatusText.Text = "Önce bir kişi seçin.";
             return;
         }
@@ -320,66 +477,140 @@ public partial class ChatWindow : ChromeWindow
 
     async void Window_Drop(object sender, DragEventArgs e)
     {
-        if (e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0)
-            await SendFile(files[0], SelectedId);
+        e.Handled = true;
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] dropped || dropped.Length == 0) return;
+        var files = CollectFiles(dropped);
+        if (files.Count == 0)
+        {
+            StatusText.Text = "Gönderilecek dosya yok.";
+            return;
+        }
+        await SendFiles(files, SelectedId);
     }
 
     void Window_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+        var ok = e.Data.GetDataPresent(DataFormats.FileDrop);
+        e.Effects = ok ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
-    async Task SendFile(string path, string? peerId)
+    static List<string> CollectFiles(IEnumerable<string> paths)
+    {
+        var files = new List<string>();
+        foreach (var path in paths)
+        {
+            if (File.Exists(path))
+            {
+                files.Add(path);
+                continue;
+            }
+            if (!Directory.Exists(path)) continue;
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+                {
+                    if (files.Count >= 200) return files;
+                    files.Add(file);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write(ex);
+            }
+        }
+        return files;
+    }
+
+    Task SendFile(string path, string? peerId) => SendFiles([path], peerId);
+
+    async Task SendFiles(IReadOnlyList<string> paths, string? peerId)
     {
         if (string.IsNullOrEmpty(peerId))
         {
-            MessageBox.Show(this, "Sohbete göndermek için önce soldan bir kişi seçin.", "Ekran alıntısı");
-            StatusText.Text = "Önce bir kişi seçin.";
+            MessageBox.Show(this, "Önce soldan Ortak konuşmayı veya bir kişiyi seçin.", "Dosya");
+            StatusText.Text = "Önce bir konuşma seçin.";
             return;
         }
         if (peerId != SelectedId)
             Bind(peerId, App.Me.Directory.Peers.FirstOrDefault(p => p.Id == peerId)?.Name ?? "Sohbet");
         if (_busy) return;
         _busy = true;
-        var name = System.IO.Path.GetFileName(path);
-        var line = new ChatLine
-        {
-            Mine = true,
-            FileName = name,
-            FilePath = path,
-            Text = name,
-            Status = "Gönderiliyor",
-            Utc = DateTime.Now
-        };
-        App.Me.Chats.Add(peerId, line);
-        StatusText.Text = "Gönderiliyor…";
+        var sent = 0;
+        var waiting = false;
         try
         {
-            var error = await App.Me.Node.SendFileAsync(peerId, path);
-            line.Status = error ?? "Gönderildi";
-            StatusText.Text = error ?? "Gönderildi.";
-            App.Me.Chats.Save(peerId);
-        }
-        catch (Exception ex)
-        {
-            Log.Write(ex);
-            line.Status = "Gönderilemedi";
-            StatusText.Text = "Gönderilemedi.";
-            App.Me.Chats.Save(peerId);
+            foreach (var path in paths)
+            {
+                if (!File.Exists(path)) continue;
+                var name = Path.GetFileName(path);
+                var line = new ChatLine
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Mine = true,
+                    AuthorId = App.Me.Settings.ComputerId,
+                    FileName = name,
+                    FilePath = path,
+                    Text = name,
+                    Status = "Gönderiliyor",
+                    Utc = DateTime.Now
+                };
+                App.Me.Chats.Add(peerId, line);
+                StatusText.Text = "Gönderiliyor… " + name;
+                try
+                {
+                    var error = peerId == RoomChat.Id
+                        ? await App.Me.Node.SendRoomFileAsync(line.Id, path)
+                        : await App.Me.Node.SendFileAsync(peerId, path, line.Id);
+                    var queued = error == null && peerId != RoomChat.Id && App.Me.Node.IsQueued(peerId, line.Id);
+                    if (error != null && peerId != RoomChat.Id) line.Failed = true;
+                    line.Status = error ?? (queued ? "İletilecek" : "Gönderildi");
+                    if (queued) waiting = true;
+                    if (error == null) sent++;
+                    else StatusText.Text = name + ": " + error;
+                }
+                catch (Exception ex)
+                {
+                    Log.Write(ex);
+                    line.Failed = true;
+                    line.Status = "Gönderilemedi";
+                    StatusText.Text = name + " gönderilemedi.";
+                }
+                App.Me.Chats.Save(peerId);
+            }
         }
         finally
         {
             _busy = false;
         }
+        if (waiting)
+            StatusText.Text = "İletilecek. Kişi açılınca gider.";
+        else if (sent > 0)
+            StatusText.Text = sent == 1 ? "Gönderildi." : sent + " dosya gönderildi.";
     }
 
-    void OpenFile_Click(object sender, RoutedEventArgs e)
+    async void OpenFile_Click(object sender, RoutedEventArgs e)
     {
         if (LineOf(sender) is not ChatLine line) return;
         var path = line.FilePath;
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
             path = SharedFiles.FindIncoming(line.FileName ?? "");
+        if ((string.IsNullOrEmpty(path) || !File.Exists(path)) && SelectedId == RoomChat.Id && line.Id.Length > 0)
+        {
+            line.Status = "Alınıyor";
+            StatusText.Text = "Dosya alınıyor…";
+            var (error, fetched) = await App.Me.Node.FetchRoomFileAsync(line.Id, line.FileName ?? "", line.AuthorId);
+            if (error != null || string.IsNullOrEmpty(fetched) || !File.Exists(fetched))
+            {
+                line.Status = error ?? "Dosya alınamadı";
+                StatusText.Text = line.Status;
+                return;
+            }
+            path = fetched;
+            line.FilePath = fetched;
+            line.Status = "Alındı";
+            App.Me.Chats.Save(RoomChat.Id);
+        }
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
         {
             StatusText.Text = "Dosya bulunamadı.";

@@ -40,12 +40,13 @@ public sealed class SettingsService
                 var model = JsonSerializer.Deserialize<SettingsModel>(File.ReadAllText(_path), JsonOptions) ?? new SettingsModel();
                 model.Approved ??= new();
                 model.Rejected ??= new();
+                model.People ??= new();
                 model.Shares ??= new();
                 model.FolderColors ??= new();
                 if (string.IsNullOrWhiteSpace(model.ComputerId))
                     model.ComputerId = Guid.NewGuid().ToString("N");
                 if (string.IsNullOrWhiteSpace(model.Theme))
-                    model.Theme = "Lacivert";
+                    model.Theme = "Tiffany";
                 if (model.Appearance != "Karanlık")
                     model.Appearance = "Aydınlık";
                 if (string.IsNullOrWhiteSpace(model.TextColor))
@@ -87,6 +88,27 @@ public sealed class SettingsService
             if (approved) Current.Approved.Add(peer);
             else Current.Rejected.Add(peer);
             SaveLocked();
+        }
+    }
+
+    public void RememberPerson(string id, string name)
+    {
+        if (id.Length == 0 || id == Current.ComputerId) return;
+        lock (_gate)
+        {
+            var found = Current.People.FirstOrDefault(p => p.Id == id);
+            var label = name.Length == 0 ? "Bilgisayar" : name;
+            if (found == null)
+            {
+                Current.People.Add(new KnownPeer { Id = id, Name = label });
+                SaveLocked();
+                return;
+            }
+            if (!string.Equals(found.Name, label, StringComparison.Ordinal))
+            {
+                found.Name = label;
+                SaveLocked();
+            }
         }
     }
 

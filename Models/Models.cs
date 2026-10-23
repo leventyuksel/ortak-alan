@@ -11,11 +11,12 @@ public abstract class Observable : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    protected void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    protected bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {
-        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        return true;
     }
 
     protected void Raise([CallerMemberName] string? name = null) =>
@@ -42,33 +43,99 @@ public sealed class SettingsModel
 {
     public string ComputerId { get; set; } = Guid.NewGuid().ToString("N");
     public string ComputerName { get; set; } = "";
-    public string Theme { get; set; } = "Lacivert";
+    public string Theme { get; set; } = "Tiffany";
     public string Appearance { get; set; } = "Aydınlık";
     public string TextColor { get; set; } = "Otomatik";
     public bool StartWithWindows { get; set; } = true;
     public List<KnownPeer> Approved { get; set; } = new();
     public List<KnownPeer> Rejected { get; set; } = new();
+    public List<KnownPeer> People { get; set; } = new();
     public List<ShareItem> Shares { get; set; } = new();
     public Dictionary<string, string> FolderColors { get; set; } = new();
 }
 
+public static class RoomChat
+{
+    public const string Id = "ortak";
+    public const string Title = "Ortak konuşma";
+}
+
+public sealed record RoomPost(string Id, string Text, string Author, string AuthorId, string? FileName, long UtcTicks);
+
+public sealed record RoomFile(string MessageId, string Author, string AuthorId, string FileName, string Path);
+
 public sealed class ChatLine : Observable
 {
+    public string Id { get; set; } = "";
     public string Text { get; set; } = "";
     public bool Mine { get; set; }
+    public string Author { get; set; } = "";
+    public string AuthorId { get; set; } = "";
     public string? FileName { get; set; }
-    public string? FilePath { get; set; }
+    string? _filePath;
+    public string? FilePath
+    {
+        get => _filePath;
+        set
+        {
+            _filePath = value;
+            Raise(nameof(FilePath));
+            Raise(nameof(Action));
+        }
+    }
     public DateTime Utc { get; set; } = DateTime.Now;
 
     string _status = "";
     public string Status
     {
         get => _status;
-        set => Set(ref _status, value);
+        set
+        {
+            if (Set(ref _status, value))
+            {
+                Raise(nameof(HasStatus));
+                Raise(nameof(TickText));
+            }
+        }
+    }
+
+    bool _seen;
+    public bool Seen
+    {
+        get => _seen;
+        set
+        {
+            if (Set(ref _seen, value)) Raise(nameof(TickText));
+        }
+    }
+
+    bool _failed;
+    public bool Failed
+    {
+        get => _failed;
+        set
+        {
+            if (Set(ref _failed, value)) Raise(nameof(ShowTicks));
+        }
     }
 
     [JsonIgnore]
     public bool IsFile => !string.IsNullOrEmpty(FileName);
+
+    [JsonIgnore]
+    public bool HasStatus => !IsFile && Status.Length > 0;
+
+    [JsonIgnore]
+    public bool ShowTicks => Mine && !Failed && Id.Length > 0;
+
+    [JsonIgnore]
+    public string TickText => Seen ? "Görüldü" : Status == "İletilecek" ? "İletilecek" : "İletildi";
+
+    [JsonIgnore]
+    public bool ShowAuthor => !Mine && Author.Length > 0;
+
+    [JsonIgnore]
+    public string Action => IsFile && (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath)) ? "Al" : "Aç";
 }
 
 public sealed class RemoteShare
@@ -233,15 +300,31 @@ public sealed class PeerDirectory
             vm.Apply(snapshot);
         }
 
-        for (var i = Peers.Count - 1; i >= 0; i--)
+        foreach (var peer in Peers)
         {
-            if (!ids.Contains(Peers[i].Id))
-                Peers.RemoveAt(i);
+            if (!ids.Contains(peer.Id))
+                peer.Online = false;
         }
 
         Changed?.Invoke();
     }
+
+    public void Remember(string id, string name)
+    {
+        if (id.Length == 0 || Peers.Any(p => p.Id == id)) return;
+        var vm = new PeerVm { Id = id };
+        vm.Apply(new PeerSnapshot
+        {
+            Id = id,
+            Name = name.Length == 0 ? "Bilgisayar" : name,
+            Online = false,
+            Ip = IPAddress.Loopback
+        });
+        Peers.Add(vm);
+        Changed?.Invoke();
+    }
 }
 
-public sealed record IncomingChat(string PeerId, string PeerName, string Text);
-public sealed record IncomingFile(string PeerId, string PeerName, string FileName, string Path);
+public sealed record IncomingChat(string PeerId, string PeerName, string Text, string MessageId);
+public sealed record IncomingFile(string PeerId, string PeerName, string FileName, string Path, string MessageId);
+public sealed record IncomingPrint(string PeerName, string FileName, string PrinterName, string? Error);

@@ -29,8 +29,15 @@ static class SharedFiles
         "OrtakAlan",
         "Paylaşılan Dosyalar");
 
-    public static string Gelen => IncomingRoot;
+    public static string Gelen => DesktopShared();
     static string IncomingRoot => Path.Combine(Root, "Gelen");
+
+    public static string DesktopShared()
+    {
+        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "Paylaşılan Dosyalar");
+        Directory.CreateDirectory(folder);
+        return folder;
+    }
     static string Shell32 => Path.Combine(Environment.SystemDirectory, "shell32.dll");
 
     public static void Prepare()
@@ -82,14 +89,12 @@ static class SharedFiles
 
     public static string TakeIncoming(string tempPath, string peerName, string fileName)
     {
+        _ = peerName;
         lock (Gate)
         {
             return UnderMutex(() =>
             {
-                PrepareCore();
-                var who = string.IsNullOrWhiteSpace(peerName) ? "Sohbet" : peerName;
-                var dir = Path.Combine(IncomingRoot, Clean(who));
-                Directory.CreateDirectory(dir);
+                var dir = DesktopShared();
                 var dest = NextFree(dir, SafeFile(fileName));
                 File.Move(tempPath, dest);
                 Notify(dir);
@@ -103,6 +108,7 @@ static class SharedFiles
         if (string.IsNullOrWhiteSpace(fileName)) return null;
         var dirs = new[]
         {
+            DesktopShared(),
             IncomingRoot,
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "OrtakAlan")
         };

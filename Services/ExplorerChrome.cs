@@ -32,6 +32,7 @@ static class ExplorerChrome
 
 static class FolderArt
 {
+    public static readonly Color Tiffany = Color.FromRgb(0x0A, 0xBA, 0xB5);
     static readonly Dictionary<string, ImageSource> Cache = new(StringComparer.OrdinalIgnoreCase);
 
     public static ImageSource Create(Color color)

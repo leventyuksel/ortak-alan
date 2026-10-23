@@ -11,7 +11,10 @@ public partial class PickPrinterWindow : ChromeWindow
     {
         InitializeComponent();
         foreach (string printer in PrinterSettings.InstalledPrinters)
+        {
+            if (LocalPrinters.IsVirtual(printer)) continue;
             PrinterList.Items.Add(printer);
+        }
         if (PrinterList.Items.Count == 0) EmptyText.Visibility = Visibility.Visible;
         else PrinterList.SelectedIndex = 0;
     }

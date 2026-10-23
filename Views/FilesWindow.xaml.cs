@@ -138,7 +138,7 @@ public partial class FilesWindow : ChromeWindow
             new()
             {
                 Title = "Paylaşılan Dosyalar",
-                Icon = ExplorerIcons.For("", true, false),
+                Icon = FolderArt.Create(FolderArt.Tiffany),
                 Place = new Place()
             },
             new()
@@ -1441,7 +1441,7 @@ public partial class FilesWindow : ChromeWindow
             };
             wrap.Children.Add(button);
         }
-        Swatch(null, Color.FromRgb(0xF0, 0xC4, 0x2E), "Varsayılan");
+        Swatch(null, FolderArt.Tiffany, "Varsayılan");
         Swatch("#E85D4C", Color.FromRgb(0xE8, 0x5D, 0x4C), "Kırmızı");
         Swatch("#F08A24", Color.FromRgb(0xF0, 0x8A, 0x24), "Turuncu");
         Swatch("#F0C42E", Color.FromRgb(0xF0, 0xC4, 0x2E), "Sarı");
@@ -1503,9 +1503,11 @@ public partial class FilesWindow : ChromeWindow
 
     static ImageSource? IconOf(string name, bool dir, bool computer, string key)
     {
-        if (dir && key.Length > 0 && App.Me.Settings.FolderColors.TryGetValue(key, out var hex) && TryColor(hex, out var color))
+        if (!dir || computer)
+            return ExplorerIcons.For(name, dir, computer);
+        if (key.Length > 0 && App.Me.Settings.FolderColors.TryGetValue(key, out var hex) && TryColor(hex, out var color))
             return FolderArt.Create(color);
-        return ExplorerIcons.For(name, dir, computer);
+        return FolderArt.Create(FolderArt.Tiffany);
     }
 
     static string ColorKey(FileRow row)

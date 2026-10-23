@@ -40,7 +40,7 @@
                     <Grid>
                       <Ellipse Width="42" Height="42" Stroke="{DynamicResource Accent}" StrokeThickness="2" Visibility="{Binding Selected, Converter={StaticResource BoolVis}}"/>
                       <Ellipse Width="30" Height="30" Fill="{Binding Color}"/>
-                      <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Selected, Converter={StaticResource BoolVis}}"/>
+                      <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" Foreground="{Binding Mark}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Selected, Converter={StaticResource BoolVis}}"/>
                     </Grid>
                   </ControlTemplate>
                 </Button.Template>
@@ -55,7 +55,7 @@
       <Border BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="16" MinHeight="96">
         <StackPanel>
           <Border Background="{DynamicResource Accent}" CornerRadius="10" Padding="12,8" HorizontalAlignment="Right">
-            <TextBlock Text="Aldım." Foreground="White"/>
+            <TextBlock Text="Aldım." Foreground="{DynamicResource OnAccent}"/>
           </Border>
           <Button Content="Gönder" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right" Margin="0,12,0,0" IsHitTestVisible="False"/>
         </StackPanel>

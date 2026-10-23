@@ -35,6 +35,21 @@ public sealed class PeerNode : IDisposable
     public event Action<IReadOnlyList<PeerSnapshot>>? PeersUpdated;
     public event Action<IncomingChat>? ChatReceived;
     public event Action<IncomingFile>? FileReceived;
+    public event Action<string, string>? Delivered;
+    public event Action<string, string, string>? SendFailed;
+    public event Action<string, string>? MessageSeen;
+    public event Action<IncomingPrint>? PrintReceived;
+    public event Action<RoomPost>? RoomReceived;
+    public event Action<RoomFile>? RoomFileSaved;
+    public Func<IReadOnlyList<RoomPost>>? RoomHistory { get; set; }
+    public Func<string, string?>? RoomFilePath { get; set; }
+    readonly HashSet<string> _roomSeen = new();
+    readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _roomFetches = new();
+    readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> _roomMiss = new();
+    readonly object _outLock = new();
+    readonly SemaphoreSlim _flush = new(1, 1);
+    readonly Dictionary<string, DateTime> _hold = new();
+    List<OutboxItem>? _out;
 
     public PeerNode(SettingsModel settings, SettingsService store, Func<string, string, Task<bool?>> approve)
     {
@@ -60,16 +75,368 @@ public sealed class PeerNode : IDisposable
         catch (Exception ex) { Log.Write(ex); }
     }
 
-    public async Task<string?> SendChatAsync(string peerId, string text)
+    public async Task<string?> SendChatAsync(string peerId, string text, string messageId)
     {
         if (text.Length > 4000) text = text[..4000];
+        if (messageId.Length == 0) messageId = Guid.NewGuid().ToString("N");
+        if (Rejected(peerId)) return "Bu bilgisayar isteği reddetti.";
+        if (!IsOnline(peerId))
+        {
+            Enqueue(new OutboxItem { PeerId = peerId, Id = messageId, Text = text, Kind = "text" });
+            return null;
+        }
         var (link, error) = await EnsureAsync(peerId);
-        if (link == null) return error;
-        await link.Send(Obj(("t", "chat"), ("text", text)));
+        if (link == null)
+        {
+            if (error == "Çevrimdışı")
+            {
+                Enqueue(new OutboxItem { PeerId = peerId, Id = messageId, Text = text, Kind = "text" });
+                return null;
+            }
+            return error;
+        }
+        await link.Send(Obj(("t", "chat"), ("id", messageId), ("text", text)));
+        _ = FlushAsync(peerId);
         return null;
     }
 
-    public async Task<string?> SendFileAsync(string peerId, string path)
+    public async Task<string?> SendSeenAsync(string peerId, string chatId, IReadOnlyList<string> ids)
+    {
+        if (peerId.Length == 0 || ids.Count == 0) return null;
+        if (TryLink(peerId, out var open) && open != null)
+        {
+            await open.Send(Obj(("t", "seen"), ("chat", chatId), ("ids", string.Join(",", ids))));
+            return null;
+        }
+        foreach (var id in ids)
+            Enqueue(new OutboxItem { PeerId = peerId, Id = id, Chat = chatId, Kind = "seen" });
+        if (IsOnline(peerId) && _store.IsApproved(peerId))
+            _ = FlushAsync(peerId);
+        return null;
+    }
+
+    public bool IsQueued(string peerId, string messageId)
+    {
+        lock (_outLock)
+            return Outbox().Any(item => item.PeerId == peerId && item.Id == messageId && item.Kind != "seen");
+    }
+
+    public async Task FlushAsync(string peerId)
+    {
+        if (!IsOnline(peerId) || Holding(peerId)) return;
+        await _flush.WaitAsync(_cts.Token);
+        try
+        {
+            if (!IsOnline(peerId) || Holding(peerId)) return;
+            var items = CopyOut(peerId);
+            foreach (var item in items.Where(item => item.Kind != "seen"))
+            {
+                if (!IsOnline(peerId)) return;
+                string? error;
+                if (item.Kind == "file")
+                {
+                    if (!File.Exists(item.File))
+                    {
+                        RemoveOut(item);
+                        continue;
+                    }
+                    error = await SendFileAsync(peerId, item.File, item.Id, null, null, null);
+                }
+                else
+                {
+                    var (link, err) = await EnsureAsync(peerId);
+                    if (link == null) error = err;
+                    else
+                    {
+                        await link.Send(Obj(("t", "chat"), ("id", item.Id), ("text", item.Text)));
+                        error = null;
+                    }
+                }
+                if (error != null)
+                {
+                    Hold(peerId, error.Contains("reddetti", StringComparison.Ordinal) ? TimeSpan.FromMinutes(10) : TimeSpan.FromSeconds(20));
+                    var id = item.Id;
+                    Ui(() => SendFailed?.Invoke(peerId, id, error));
+                    return;
+                }
+                RemoveOut(item);
+                var sent = item.Id;
+                Ui(() => Delivered?.Invoke(peerId, sent));
+            }
+
+            var receipts = CopyOut(peerId).Where(item => item.Kind == "seen").ToList();
+            if (receipts.Count == 0 || !IsOnline(peerId)) return;
+            if (!TryLink(peerId, out var seenLink) || seenLink == null)
+            {
+                if (!_store.IsApproved(peerId)) return;
+                var (link, error) = await EnsureAsync(peerId);
+                if (link == null)
+                {
+                    if (error != null)
+                        Hold(peerId, error.Contains("reddetti", StringComparison.Ordinal) ? TimeSpan.FromMinutes(10) : TimeSpan.FromSeconds(20));
+                    return;
+                }
+                seenLink = link;
+            }
+            foreach (var group in receipts.GroupBy(item => item.Chat))
+            {
+                await seenLink.Send(Obj(("t", "seen"), ("chat", group.Key), ("ids", string.Join(",", group.Select(item => item.Id).Distinct()))));
+                foreach (var item in group) RemoveOut(item);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+        }
+        finally
+        {
+            _flush.Release();
+        }
+    }
+
+    public async Task<string?> SendFileAsync(string peerId, string path, string? messageId = null)
+    {
+        if (!File.Exists(path)) return "Dosya bulunamadı";
+        var info = new FileInfo(path);
+        if (info.Length > MaxFileBytes) return "Dosya 150 MB sınırını aşıyor";
+        if (Rejected(peerId)) return "Bu bilgisayar isteği reddetti.";
+        var id = string.IsNullOrEmpty(messageId) ? Guid.NewGuid().ToString("N") : messageId;
+        if (!IsOnline(peerId))
+        {
+            Enqueue(new OutboxItem { PeerId = peerId, Id = id, File = path, Kind = "file" });
+            return null;
+        }
+        var error = await SendFileAsync(peerId, path, id, null, null, null);
+        if (error == "Çevrimdışı")
+        {
+            Enqueue(new OutboxItem { PeerId = peerId, Id = id, File = path, Kind = "file" });
+            return null;
+        }
+        if (error == null) _ = FlushAsync(peerId);
+        return error;
+    }
+
+    public void NoteRoom(string messageId)
+    {
+        if (messageId.Length > 0) _roomSeen.Add(messageId);
+    }
+
+    public void SeedRoom(IEnumerable<string> ids)
+    {
+        foreach (var id in ids) NoteRoom(id);
+    }
+
+    public async Task<string?> BroadcastRoomAsync(ChatLine line)
+    {
+        NoteRoom(line.Id);
+        var ticks = line.Utc.Kind == DateTimeKind.Utc ? line.Utc.Ticks : line.Utc.ToUniversalTime().Ticks;
+        return await BroadcastRoom(line.Id, line.Text, line.FileName ?? "", line.Author.Length == 0 ? _settings.ComputerName : line.Author, line.AuthorId.Length == 0 ? _settings.ComputerId : line.AuthorId, ticks);
+    }
+
+    public async Task<string?> SendRoomFileAsync(string messageId, string path)
+    {
+        if (!File.Exists(path)) return "Dosya bulunamadı";
+        var info = new FileInfo(path);
+        if (info.Length > MaxFileBytes) return "Dosya 150 MB sınırını aşıyor";
+        NoteRoom(messageId);
+        var ticks = DateTime.UtcNow.Ticks;
+        var fileName = Path.GetFileName(path);
+        await BroadcastRoom(messageId, "", fileName, _settings.ComputerName, _settings.ComputerId, ticks);
+        var failed = 0;
+        var ids = OnlineIds();
+        foreach (var id in ids)
+        {
+            var error = await SendFileAsync(id, path, messageId, messageId, _settings.ComputerId, _settings.ComputerName);
+            if (error != null) failed++;
+        }
+        return ids.Count > 0 && failed == ids.Count ? "Dosya şu an kimseye ulaşmadı" : null;
+    }
+
+    public async Task<(string? Error, string? Path)> FetchRoomFileAsync(string messageId, string fileName, string preferredPeer)
+    {
+        var peers = new List<string>();
+        if (preferredPeer.Length > 0) peers.Add(preferredPeer);
+        foreach (var id in OnlineIds())
+            if (!peers.Contains(id)) peers.Add(id);
+        if (peers.Count == 0) return ("Çevrimdışı", null);
+
+        foreach (var peer in peers)
+        {
+            var (link, _) = await EnsureAsync(peer);
+            if (link == null) continue;
+            var req = Guid.NewGuid().ToString("N");
+            var got = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var miss = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _roomFetches[messageId] = got;
+            _roomMiss[req] = miss;
+            try
+            {
+                await link.Send(Obj(("t", "room-get"), ("req", req), ("id", messageId), ("name", fileName)));
+                var done = await Task.WhenAny(got.Task, miss.Task, Task.Delay(TimeSpan.FromSeconds(40), _cts.Token));
+                if (done == got.Task) return (null, await got.Task);
+            }
+            catch (Exception ex)
+            {
+                Log.Write(ex);
+            }
+            finally
+            {
+                _roomFetches.TryRemove(messageId, out _);
+                _roomMiss.TryRemove(req, out _);
+            }
+        }
+        return ("Dosya alınamadı", null);
+    }
+
+    async Task<string?> BroadcastRoom(string id, string text, string file, string author, string authorId, long ticks)
+    {
+        if (text.Length > 4000) text = text[..4000];
+        var ids = OnlineIds();
+        if (ids.Count == 0) return null;
+        var failed = 0;
+        foreach (var peerId in ids)
+        {
+            var (link, _) = await EnsureAsync(peerId);
+            if (link == null)
+            {
+                failed++;
+                continue;
+            }
+            try
+            {
+                await link.Send(RoomObj(id, text, file, author, authorId, ticks));
+            }
+            catch (Exception ex)
+            {
+                Log.Write(ex);
+                failed++;
+            }
+        }
+        return failed == ids.Count ? "Şu an kimseye ulaşılmadı" : null;
+    }
+
+    List<string> OnlineIds()
+    {
+        lock (_peerLock)
+            return _peers.Values.Where(p => p.IsOnline && p.Port > 0 && p.Id != _settings.ComputerId).Select(p => p.Id).ToList();
+    }
+
+    async Task SendRoomHistory(Link link)
+    {
+        IReadOnlyList<RoomPost>? posts;
+        try { posts = RoomHistory?.Invoke(); }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            return;
+        }
+        if (posts == null || posts.Count == 0) return;
+        foreach (var post in posts.TakeLast(80))
+        {
+            if (post.Id.Length == 0) continue;
+            try { await link.Send(RoomObj(post.Id, post.Text, post.FileName ?? "", post.Author, post.AuthorId, post.UtcTicks)); }
+            catch (Exception ex)
+            {
+                Log.Write(ex);
+                return;
+            }
+        }
+    }
+
+    void AcceptRoom(Link link, JsonElement message)
+    {
+        var id = Str(message, "id");
+        if (id.Length == 0 || !_roomSeen.Add(id)) return;
+        var file = Str(message, "file");
+        var text = Str(message, "text");
+        if (text.Length == 0) text = file;
+        var authorId = Str(message, "from");
+        if (authorId.Length == 0) authorId = link.PeerId;
+        var author = Str(message, "name");
+        if (author.Length == 0) author = link.PeerName;
+        var ticks = LongOf(message, "utc");
+        var post = new RoomPost(id, text, author, authorId, file.Length == 0 ? null : file, ticks);
+        Ui(() => RoomReceived?.Invoke(post));
+        var except = link.PeerId;
+        _ = RelayRoom(except, id, text, file, author, authorId, ticks);
+    }
+
+    async Task RelayRoom(string exceptPeerId, string id, string text, string file, string author, string authorId, long ticks)
+    {
+        foreach (var other in _links.Values.ToArray())
+        {
+            if (!other.Alive || other.PeerId == exceptPeerId || other.PeerId.Length == 0) continue;
+            try { await other.Send(RoomObj(id, text, file, author, authorId, ticks)); }
+            catch (Exception ex) { Log.Write(ex); }
+        }
+    }
+
+    async Task ReplyRoomFile(Link link, JsonElement message)
+    {
+        var req = Str(message, "req");
+        var id = Str(message, "id");
+        string? path = null;
+        try { path = RoomFilePath?.Invoke(id); }
+        catch (Exception ex) { Log.Write(ex); }
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+        {
+            if (req.Length > 0) await link.Send(Obj(("t", "room-miss"), ("req", req)));
+            return;
+        }
+
+        var info = new FileInfo(path);
+        if (info.Length > MaxFileBytes)
+        {
+            if (req.Length > 0) await link.Send(Obj(("t", "room-miss"), ("req", req)));
+            return;
+        }
+
+        var name = info.Name;
+        await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", name), ("size", info.Length), ("room", id), ("who", _settings.ComputerName), ("from", _settings.ComputerId)));
+        await using var stream = File.OpenRead(path);
+        var buffer = new byte[64 * 1024];
+        var index = 0;
+        int read;
+        while ((read = await stream.ReadAsync(buffer, _cts.Token)) > 0)
+        {
+            var slice = new byte[read];
+            Buffer.BlockCopy(buffer, 0, slice, 0, read);
+            await link.Send(Obj(("t", "file-chunk"), ("id", id), ("i", index++), ("data", Convert.ToBase64String(slice))));
+        }
+        await link.Send(Obj(("t", "file-end"), ("id", id)));
+    }
+
+    Task CompleteRoomFile(Link link, IncomingTransfer transfer)
+    {
+        string saved;
+        try
+        {
+            saved = SharedFiles.TakeIncoming(transfer.Temp, link.PeerName, transfer.Name);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            saved = UniqueDownload(transfer.Name);
+            Directory.CreateDirectory(Path.GetDirectoryName(saved)!);
+            if (File.Exists(saved)) File.Delete(saved);
+            File.Move(transfer.Temp, saved);
+        }
+
+        var messageId = transfer.RoomId ?? "";
+        var authorId = transfer.AuthorId.Length > 0 ? transfer.AuthorId : link.PeerId;
+        var author = transfer.Author.Length > 0 ? transfer.Author : link.PeerName;
+        var fileName = transfer.Name;
+        var path = saved;
+        if (_roomFetches.TryRemove(messageId, out var wait))
+            wait.TrySetResult(path);
+        Ui(() => RoomFileSaved?.Invoke(new RoomFile(messageId, author, authorId, fileName, path)));
+        return Task.CompletedTask;
+    }
+
+    static JsonObject RoomObj(string id, string text, string file, string author, string authorId, long ticks) =>
+        Obj(("t", "room"), ("id", id), ("text", text), ("file", file), ("name", author), ("from", authorId), ("utc", ticks));
+
+    public async Task<string?> SendFileAsync(string peerId, string path, string? transferId, string? roomId, string? authorId, string? authorName)
     {
         if (!File.Exists(path)) return "Dosya bulunamadı";
         var info = new FileInfo(path);
@@ -77,9 +444,12 @@ public sealed class PeerNode : IDisposable
         var (link, error) = await EnsureAsync(peerId);
         if (link == null) return error;
 
-        var id = Guid.NewGuid().ToString("N");
+        var id = string.IsNullOrEmpty(transferId) ? Guid.NewGuid().ToString("N") : transferId;
         var name = Path.GetFileName(path);
-        await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", name), ("size", info.Length)));
+        if (string.IsNullOrEmpty(roomId))
+            await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", name), ("size", info.Length)));
+        else
+            await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", name), ("size", info.Length), ("room", roomId), ("who", authorName ?? ""), ("from", authorId ?? "")));
         await using var stream = File.OpenRead(path);
         var buffer = new byte[64 * 1024];
         var index = 0;
@@ -92,6 +462,51 @@ public sealed class PeerNode : IDisposable
         }
         await link.Send(Obj(("t", "file-end"), ("id", id)));
         return null;
+    }
+
+    public async Task<string?> SendPrintAsync(string peerId, string shareId, string path)
+    {
+        if (!File.Exists(path)) return "Dosya bulunamadı";
+        var info = new FileInfo(path);
+        if (info.Length <= 0) return "Dosya boş";
+        if (info.Length > MaxFileBytes) return "Dosya 150 MB sınırını aşıyor";
+        var (link, error) = await EnsureAsync(peerId);
+        if (link == null) return error;
+
+        var id = Guid.NewGuid().ToString("N");
+        var waiter = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        link.Pending[id] = waiter;
+        try
+        {
+            var name = Path.GetFileName(path);
+            await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", name), ("size", info.Length), ("print", shareId)));
+            await using var stream = File.OpenRead(path);
+            var buffer = new byte[64 * 1024];
+            var index = 0;
+            int read;
+            while ((read = await stream.ReadAsync(buffer, _cts.Token)) > 0)
+            {
+                var slice = new byte[read];
+                Buffer.BlockCopy(buffer, 0, slice, 0, read);
+                await link.Send(Obj(("t", "file-chunk"), ("id", id), ("i", index++), ("data", Convert.ToBase64String(slice))));
+            }
+            await link.Send(Obj(("t", "file-end"), ("id", id)));
+            var finished = await Task.WhenAny(waiter.Task, Task.Delay(TimeSpan.FromMinutes(3), _cts.Token));
+            if (finished != waiter.Task)
+            {
+                link.Pending.TryRemove(id, out _);
+                return "Yazıcı yanıt vermedi";
+            }
+
+            var message = await waiter.Task;
+            var problem = Str(message, "error");
+            return problem.Length == 0 ? null : problem;
+        }
+        catch
+        {
+            link.Pending.TryRemove(id, out _);
+            throw;
+        }
     }
 
     public async Task<string?> ConnectAsync(string peerId)
@@ -308,6 +723,7 @@ public sealed class PeerNode : IDisposable
 
         ReplaceLink(link);
         _ = Task.Run(() => ReadLoop(link));
+        _ = SendRoomHistory(link);
         return (link, null);
     }
 
@@ -358,6 +774,7 @@ public sealed class PeerNode : IDisposable
             {
                 await link.Send(Obj(("t", "welcome")));
                 ReplaceLink(link);
+                await SendRoomHistory(link);
                 await ReadLoop(link);
             }
             else if (decision == false)
@@ -428,6 +845,13 @@ public sealed class PeerNode : IDisposable
     {
         var kind = Str(message, "t");
         var req = Str(message, "req");
+        if (kind == "print-result")
+        {
+            var printId = Str(message, "id");
+            if (printId.Length > 0 && link.Pending.TryRemove(printId, out var printWaiter))
+                printWaiter.TrySetResult(message);
+            return;
+        }
         if (req.Length > 0 && (kind is "dir" or "fs") && link.Pending.TryRemove(req, out var waiter))
         {
             waiter.TrySetResult(message);
@@ -437,7 +861,25 @@ public sealed class PeerNode : IDisposable
         switch (kind)
         {
             case "chat":
-                Ui(() => ChatReceived?.Invoke(new IncomingChat(link.PeerId, link.PeerName, Str(message, "text"))));
+                Ui(() => ChatReceived?.Invoke(new IncomingChat(link.PeerId, link.PeerName, Str(message, "text"), Str(message, "id"))));
+                break;
+            case "seen":
+            {
+                var chat = Str(message, "chat");
+                if (chat.Length == 0) chat = link.PeerId;
+                var ids = Str(message, "ids");
+                Ui(() => MessageSeen?.Invoke(chat, ids));
+                break;
+            }
+            case "room":
+                AcceptRoom(link, message);
+                break;
+            case "room-get":
+                await ReplyRoomFile(link, message);
+                break;
+            case "room-miss":
+                if (req.Length > 0 && _roomMiss.TryRemove(req, out var missed))
+                    missed.TrySetResult(true);
                 break;
             case "list":
                 await ReplyList(link, message);
@@ -559,17 +1001,23 @@ public sealed class PeerNode : IDisposable
     void BeginIncoming(Link link, JsonElement message)
     {
         var id = Str(message, "id");
+        var printShare = Str(message, "print");
         var name = Path.GetFileName(Str(message, "name"));
         if (!SafeFileName(name))
         {
-            _ = FinishIncoming(link, id, "Dosya adı geçersiz");
+            FailStart(link, id, printShare, "Dosya adı geçersiz");
             return;
         }
 
         var size = message.TryGetProperty("size", out var sizeEl) && sizeEl.TryGetInt64(out var n) ? n : 0;
-        if (size > MaxFileBytes)
+        if (size > MaxFileBytes || (printShare.Length > 0 && size <= 0))
         {
-            _ = FinishIncoming(link, id, "Dosya 150 MB sınırını aşıyor");
+            FailStart(link, id, printShare, size <= 0 ? "Dosya boş" : "Dosya 150 MB sınırını aşıyor");
+            return;
+        }
+        if (printShare.Length > 0 && !OwnsPrinter(printShare))
+        {
+            FailStart(link, id, printShare, "Yazıcı paylaşımı yok");
             return;
         }
 
@@ -580,9 +1028,27 @@ public sealed class PeerNode : IDisposable
             Name = name,
             Temp = temp,
             Stream = File.Create(temp),
-            Waiter = waiter
+            Waiter = waiter,
+            PrintShare = printShare.Length == 0 ? null : printShare,
+            RoomId = Str(message, "room") is { Length: > 0 } room ? room : null,
+            Author = Str(message, "who"),
+            AuthorId = Str(message, "from")
         };
         link.Incoming[id] = transfer;
+    }
+
+    void FailStart(Link link, string id, string printShare, string error)
+    {
+        if (printShare.Length > 0)
+            _ = link.Send(Obj(("t", "print-result"), ("id", id), ("error", error)));
+        else
+            _ = FinishIncoming(link, id, error);
+    }
+
+    bool OwnsPrinter(string shareId)
+    {
+        var share = _store.CopyShares().FirstOrDefault(s => s.Id == shareId && s.Kind == "printer");
+        return share != null && share.Path.Length > 0;
     }
 
     static void WriteChunk(Link link, JsonElement message)
@@ -616,10 +1082,27 @@ public sealed class PeerNode : IDisposable
         if (!string.IsNullOrEmpty(error))
         {
             try { if (File.Exists(transfer.Temp)) File.Delete(transfer.Temp); } catch { /* kapanış */ }
+            if (transfer.PrintShare != null)
+            {
+                await link.Send(Obj(("t", "print-result"), ("id", id), ("error", error)));
+                return;
+            }
             if (transfer.DestPath != null)
                 await SendFs(link, id, error);
             else
                 transfer.Waiter?.Done.TrySetException(new IOException(error));
+            return;
+        }
+
+        if (transfer.PrintShare != null)
+        {
+            await CompletePrint(link, id, transfer);
+            return;
+        }
+
+        if (transfer.RoomId != null)
+        {
+            await CompleteRoomFile(link, transfer);
             return;
         }
 
@@ -665,7 +1148,58 @@ public sealed class PeerNode : IDisposable
             File.Move(transfer.Temp, saved);
         }
         var received = saved;
-        Ui(() => FileReceived?.Invoke(new IncomingFile(link.PeerId, link.PeerName, transfer.Name, received)));
+        Ui(() => FileReceived?.Invoke(new IncomingFile(link.PeerId, link.PeerName, transfer.Name, received, id)));
+    }
+
+    async Task CompletePrint(Link link, string id, IncomingTransfer transfer)
+    {
+        var share = _store.CopyShares().FirstOrDefault(s => s.Id == transfer.PrintShare && s.Kind == "printer");
+        string? error;
+        var saved = "";
+        try
+        {
+            if (share == null)
+                error = "Yazıcı paylaşımı yok";
+            else
+            {
+                saved = MovePrintFile(transfer);
+                error = await PrinterRelay.PrintAsync(share.Path, saved);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            error = "Yazdırılamadı";
+        }
+
+        try { await link.Send(Obj(("t", "print-result"), ("id", id), ("error", error ?? ""))); }
+        catch (Exception ex) { Log.Write(ex); }
+
+        var peerName = link.PeerName;
+        var fileName = transfer.Name;
+        var printer = share?.Name ?? "";
+        var problem = error;
+        Ui(() => PrintReceived?.Invoke(new IncomingPrint(peerName, fileName, printer, problem)));
+
+        if (saved.Length == 0) return;
+        var path = saved;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMinutes(10));
+            try { if (File.Exists(path)) File.Delete(path); } catch { /* kapanış */ }
+        });
+    }
+
+    static string MovePrintFile(IncomingTransfer transfer)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ortakalan-yazici");
+        Directory.CreateDirectory(dir);
+        var dest = Path.Combine(dir, transfer.Name);
+        if (File.Exists(dest))
+            dest = Path.Combine(dir, Guid.NewGuid().ToString("N")[..8] + "-" + transfer.Name);
+        if (File.Exists(transfer.Temp))
+            File.Move(transfer.Temp, dest);
+        return dest;
     }
 
     bool TryResolve(string shareId, string rel, bool wantFile, out string full, out string? error)
@@ -1215,7 +1749,7 @@ public sealed class PeerNode : IDisposable
 
     static string UniqueDownload(string fileName)
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "OrtakAlan");
+        var dir = SharedFiles.Gelen;
         Directory.CreateDirectory(dir);
         var safe = SafeFileName(fileName) ? fileName : "dosya";
         var path = Path.Combine(dir, safe);
@@ -1233,6 +1767,94 @@ public sealed class PeerNode : IDisposable
     static bool SafeFileName(string name) =>
         name.Length > 0 && name.Length < 180 && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && name is not "." and not "..";
 
+    bool IsOnline(string peerId)
+    {
+        lock (_peerLock)
+            return _peers.TryGetValue(peerId, out var peer) && peer.IsOnline && peer.Port > 0;
+    }
+
+    bool Rejected(string peerId) => _denied.Contains(peerId) || _store.IsRejected(peerId);
+
+    bool TryLink(string peerId, out Link? link)
+    {
+        if (_links.TryGetValue(peerId, out var existing) && existing.Alive)
+        {
+            link = existing;
+            return true;
+        }
+        link = null;
+        return false;
+    }
+
+    bool Holding(string peerId)
+    {
+        lock (_outLock)
+            return _hold.TryGetValue(peerId, out var until) && until > DateTime.UtcNow;
+    }
+
+    void Hold(string peerId, TimeSpan delay)
+    {
+        lock (_outLock)
+            _hold[peerId] = DateTime.UtcNow + delay;
+    }
+
+    string OutPath() => Path.Combine(_store.DirectoryPath, "giden.json");
+
+    List<OutboxItem> Outbox()
+    {
+        if (_out != null) return _out;
+        try
+        {
+            if (File.Exists(OutPath()))
+                _out = JsonSerializer.Deserialize<List<OutboxItem>>(File.ReadAllText(OutPath()), SettingsService.JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+        }
+        _out ??= new();
+        return _out;
+    }
+
+    void Enqueue(OutboxItem item)
+    {
+        lock (_outLock)
+        {
+            var box = Outbox();
+            if (box.Any(row => row.PeerId == item.PeerId && row.Kind == item.Kind && row.Id == item.Id)) return;
+            box.Add(item);
+            SaveOut();
+        }
+    }
+
+    List<OutboxItem> CopyOut(string peerId)
+    {
+        lock (_outLock)
+            return Outbox().Where(item => item.PeerId == peerId).ToList();
+    }
+
+    void RemoveOut(OutboxItem item)
+    {
+        lock (_outLock)
+        {
+            Outbox().RemoveAll(row => row.PeerId == item.PeerId && row.Kind == item.Kind && row.Id == item.Id);
+            SaveOut();
+        }
+    }
+
+    void SaveOut()
+    {
+        try
+        {
+            Directory.CreateDirectory(_store.DirectoryPath);
+            File.WriteAllText(OutPath(), JsonSerializer.Serialize(_out ?? new(), SettingsService.JsonOptions));
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+        }
+    }
+
     static void Ui(Action action)
     {
         try
@@ -1246,6 +1868,14 @@ public sealed class PeerNode : IDisposable
 
     static string Str(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
+
+    static long LongOf(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value)) return 0;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)) return number;
+        if (value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), out var text)) return text;
+        return 0;
+    }
 
     static JsonObject Obj(params (string Key, object? Value)[] fields)
     {
@@ -1263,6 +1893,16 @@ public sealed class PeerNode : IDisposable
             };
         }
         return obj;
+    }
+
+    public sealed class OutboxItem
+    {
+        public string PeerId { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string Text { get; set; } = "";
+        public string File { get; set; } = "";
+        public string Chat { get; set; } = "";
+        public string Kind { get; set; } = "text";
     }
 
     sealed class PeerState
@@ -1289,6 +1929,10 @@ public sealed class PeerNode : IDisposable
         public string Name = "";
         public string Temp = "";
         public string? DestPath;
+        public string? PrintShare;
+        public string? RoomId;
+        public string Author = "";
+        public string AuthorId = "";
         public FileStream? Stream;
         public DownloadWait? Waiter;
     }

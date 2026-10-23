@@ -28,7 +28,7 @@ public partial class ShareWindow : ChromeWindow
             Kind = share.Kind,
             Name = share.Name,
             Path = share.Path,
-            Line = share.Kind == "printer" ? "Yazıcı · Açık" : "Klasör · Açık",
+            Line = share.Kind == "printer" ? "Yazıcı · Karşı bilgisayar kendi yazıcısı gibi kullanır" : "Klasör · Açık",
             Glyph = share.Kind == "printer" ? "\uE749" : "\uE8B7",
             Warning = string.IsNullOrEmpty(share.WindowsError) ? "" : share.WindowsError,
             Tip = share.Path
@@ -115,20 +115,20 @@ public partial class ShareWindow : ChromeWindow
         if (sender is not FrameworkElement element || element.DataContext is not RemoteShareVm share) return;
         var peer = App.Me.Directory.Peers.FirstOrDefault(p => p.Id == share.PeerId);
         if (peer == null) return;
-        if (!peer.Online)
-        {
-            StatusText.Text = "Çevrimdışı";
-            return;
-        }
-
         if (share.Kind == "folder")
         {
+            if (!peer.Online)
+            {
+                StatusText.Text = "Çevrimdışı";
+                return;
+            }
             StatusText.Text = ShareConnect.OpenFolder(peer, share, true);
             return;
         }
 
-        StatusText.Text = "Yazıcıya bağlanılıyor…";
-        StatusText.Text = await ShareConnect.ConnectPrinter(peer, share);
+        StatusText.Text = "Yazıcılar klasörüne ekleniyor…";
+        var text = await ShareConnect.ConnectPrinter(peer, share, this);
+        if (text.Length > 0) StatusText.Text = text;
     }
 
     void Chat_Click(object sender, RoutedEventArgs e) => App.Me.ShowChat();

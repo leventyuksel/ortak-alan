@@ -10,8 +10,8 @@
                WindowStartupLocation="Manual"
                ResizeMode="CanResize"
                AllowDrop="True"
-               Drop="Window_Drop"
-               DragOver="Window_DragOver">
+               PreviewDrop="Window_Drop"
+               PreviewDragOver="Window_DragOver">
   <Border Background="{DynamicResource Paper}">
     <Grid>
       <Grid.RowDefinitions>
@@ -65,19 +65,53 @@
         </Grid.ColumnDefinitions>
         <Border Background="{DynamicResource Wash}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,1,0">
           <DockPanel>
-            <TextBlock DockPanel.Dock="Top" Text="Kişiler" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="12,12,12,2"/>
-            <TextBlock x:Name="OnlineText" DockPanel.Dock="Top" FontSize="12" Foreground="{DynamicResource Muted}" Margin="12,0,12,8"/>
-            <TextBlock x:Name="EmptyPeers" DockPanel.Dock="Top" Text="Ağda kimse yok." Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="10,8,10,8"/>
-            <ListBox x:Name="PeerList" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource Ink}" ItemContainerStyle="{StaticResource PeerItem}" SelectionChanged="PeerList_SelectionChanged" PreviewMouseRightButtonDown="PeerList_PreviewMouseRightButtonDown">
+            <Border x:Name="RoomCard" DockPanel.Dock="Top" Margin="8,8,8,4" MinHeight="48" CornerRadius="8" BorderThickness="1.5" Padding="8,6" Cursor="Hand"
+                    BorderBrush="#00F0FF" Background="#D008242C" MouseLeftButtonUp="Room_Click">
+              <Border.Effect>
+                <DropShadowEffect BlurRadius="12" ShadowDepth="0" Opacity="0.7" Color="#00E5FF"/>
+              </Border.Effect>
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="Ortak konuşma" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                <TextBlock Text="Herkes yazar" FontSize="12" Foreground="#9AF6FF" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+              </StackPanel>
+            </Border>
+            <TextBlock DockPanel.Dock="Top" Text="Kişiler" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="12,0,12,2"/>
+            <TextBlock x:Name="OnlineText" DockPanel.Dock="Top" FontSize="12" Foreground="{DynamicResource Muted}" Margin="12,0,12,6"/>
+            <Grid DockPanel.Dock="Top" Margin="8,0,8,6">
+              <TextBox x:Name="PersonSearch" Padding="8,4" MinHeight="30" FontSize="13" TextChanged="PersonSearch_TextChanged"/>
+              <TextBlock x:Name="PersonHint" Text="Kişi ara" Foreground="{DynamicResource Muted}" Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" FontSize="13"/>
+            </Grid>
+            <TextBlock x:Name="EmptyPeers" DockPanel.Dock="Top" Text="Henüz kimse yok." Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="10,4,10,8"/>
+            <ListBox x:Name="PeerList" Padding="0" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource Ink}"
+                     HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ItemContainerStyle="{StaticResource PeerItem}" SelectionChanged="PeerList_SelectionChanged" PreviewMouseRightButtonDown="PeerList_PreviewMouseRightButtonDown">
+              <ListBox.Template>
+                <ControlTemplate TargetType="ListBox">
+                  <ScrollViewer Focusable="False" Padding="0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" CanContentScroll="False">
+                    <ScrollViewer.Template>
+                      <ControlTemplate TargetType="ScrollViewer">
+                        <Grid>
+                          <ScrollContentPresenter/>
+                          <ScrollBar x:Name="PART_VerticalScrollBar" Orientation="Vertical" HorizontalAlignment="Right" Width="6" Margin="0,4,2,4"
+                                     Minimum="0" Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
+                                     Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"
+                                     Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+                        </Grid>
+                      </ControlTemplate>
+                    </ScrollViewer.Template>
+                    <ItemsPresenter/>
+                  </ScrollViewer>
+                </ControlTemplate>
+              </ListBox.Template>
               <ListBox.ItemTemplate>
                 <DataTemplate>
-                  <Border CornerRadius="8" BorderThickness="1.5" Padding="8,6" BorderBrush="{Binding BoxBorder}" Background="{Binding BoxFill}">
+                  <Border MinHeight="48" CornerRadius="8" BorderThickness="1.5" Padding="8,6" BorderBrush="{Binding BoxBorder}" Background="{Binding BoxFill}">
                     <Border.Effect>
-                      <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.9" Color="{Binding GlowColor}"/>
+                      <DropShadowEffect BlurRadius="12" ShadowDepth="0" Opacity="0.7" Color="{Binding GlowColor}"/>
                     </Border.Effect>
-                    <StackPanel>
-                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis"/>
-                      <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{Binding BoxBorder}" Margin="0,2,0,0"/>
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                      <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{Binding BoxBorder}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
                     </StackPanel>
                   </Border>
                 </DataTemplate>
@@ -92,7 +126,17 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
           </Grid.RowDefinitions>
-          <TextBlock x:Name="PeerTitle" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="16,12,16,8"/>
+          <Grid Margin="16,8,16,8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="220"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="PeerTitle" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <Grid Grid.Column="1">
+              <TextBox x:Name="ChatSearch" Padding="8,4" MinHeight="32" FontSize="13" TextChanged="ChatSearch_TextChanged"/>
+              <TextBlock x:Name="ChatHint" Text="Konuşmada ara" Foreground="{DynamicResource Muted}" Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" FontSize="13"/>
+            </Grid>
+          </Grid>
           <Grid Grid.Row="1">
           <TextBlock x:Name="EmptyChat" Text="Bir bilgisayar seçin." Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" Margin="24"/>
           <ScrollViewer x:Name="Transcript" VerticalScrollBarVisibility="Auto" Padding="14,0,14,8" Background="Transparent" PreviewMouseRightButtonDown="Transcript_PreviewMouseRightButtonDown">
@@ -100,6 +144,8 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <StackPanel Margin="0,4">
+                    <TextBlock Text="{Binding Author}" FontSize="11" Margin="4,0,0,1" Foreground="#5CEBFF"
+                               Visibility="{Binding ShowAuthor, Converter={StaticResource BoolVis}}"/>
                     <Border MaxWidth="280" Padding="12,8" CornerRadius="12" Visibility="{Binding IsFile, Converter={StaticResource NotBoolVis}}">
                       <Border.Style>
                         <Style TargetType="Border">
@@ -119,7 +165,7 @@
                             <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
                             <Style.Triggers>
                               <DataTrigger Binding="{Binding Mine}" Value="True">
-                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OnAccent}"/>
                               </DataTrigger>
                             </Style.Triggers>
                           </Style>
@@ -145,7 +191,7 @@
                                 <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Ink}"/>
                                 <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Muted}"/>
                               </StackPanel>
-                              <TextBlock Grid.Column="2" Text="Aç" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Accent}" FontSize="12"/>
+                              <TextBlock Grid.Column="2" Text="{Binding Action}" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Accent}" FontSize="12"/>
                             </Grid>
                           </Border>
                           <ControlTemplate.Triggers>
@@ -156,6 +202,15 @@
                         </ControlTemplate>
                       </Button.Template>
                     </Button>
+                    <TextBlock Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource Muted}" Margin="4,1,4,0"
+                               Visibility="{Binding HasStatus, Converter={StaticResource BoolVis}}"
+                               HorizontalAlignment="{Binding Mine, Converter={StaticResource MineAlign}}"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,1,2,0" ToolTip="{Binding TickText}"
+                                Visibility="{Binding ShowTicks, Converter={StaticResource BoolVis}}">
+                      <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#0ABAB5" VerticalAlignment="Center"/>
+                      <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#0ABAB5" Margin="-8,0,0,0" VerticalAlignment="Center"
+                                 Visibility="{Binding Seen, Converter={StaticResource BoolVis}}"/>
+                    </StackPanel>
                   </StackPanel>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>

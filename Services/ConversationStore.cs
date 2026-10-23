@@ -23,17 +23,37 @@ public sealed class ConversationStore
         return collection;
     }
 
-    public void Add(string peerId, ChatLine line)
+    public bool Add(string peerId, ChatLine line)
     {
         var collection = Get(peerId);
+        if (line.Id.Length > 0 && collection.Any(item => item.Id == line.Id)) return false;
         collection.Add(line);
         while (collection.Count > 200)
             collection.RemoveAt(0);
         Save(peerId);
+        return true;
+    }
+
+    public ChatLine? Find(string peerId, string lineId)
+    {
+        if (lineId.Length == 0) return null;
+        return Get(peerId).FirstOrDefault(item => item.Id == lineId);
+    }
+
+    public List<RoomPost> Posts(string peerId)
+    {
+        return Get(peerId).Select(line => new RoomPost(
+            line.Id,
+            line.Text,
+            line.Author,
+            line.AuthorId,
+            line.FileName,
+            line.Utc.Kind == DateTimeKind.Utc ? line.Utc.Ticks : line.Utc.ToUniversalTime().Ticks)).ToList();
     }
 
     public void Remove(string peerId, ChatLine line)
     {
+        if (peerId == RoomChat.Id) return;
         var collection = Get(peerId);
         if (!collection.Remove(line)) return;
         Save(peerId);
@@ -41,6 +61,7 @@ public sealed class ConversationStore
 
     public void Clear(string peerId)
     {
+        if (peerId == RoomChat.Id) return;
         var collection = Get(peerId);
         if (collection.Count == 0) return;
         collection.Clear();

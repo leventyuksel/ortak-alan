@@ -47,7 +47,13 @@ public partial class App : Application
         ThemeService.Register();
         Store = new SettingsService(dataDir);
         Store.Load();
+        if (Settings.Theme is "Lacivert" or "Mavi" or "Grafit")
+        {
+            Settings.Theme = "Tiffany";
+            Store.Save();
+        }
         ThemeService.ApplySaved(Settings.Theme, Settings.Appearance, Settings.TextColor);
+        ForgetWindowsErrors();
         BrandAssets.Init();
 
         var fresh = false;
@@ -97,16 +103,39 @@ public partial class App : Application
         if (!_demo)
         {
             DesktopShortcut.Ensure(fresh);
-            WindowsShareService.RefreshAccess(dataDir, Settings.Shares);
         }
 
         Directory = new PeerDirectory();
+        foreach (var person in Settings.People.Concat(Settings.Approved))
+            Directory.Remember(person.Id, person.Name);
         Chats = new ConversationStore(dataDir);
         _node = new PeerNode(Settings, Store, AskApproval);
-        _node.PeersUpdated += list => Directory.Apply(list);
+        _node.PeersUpdated += list =>
+        {
+            Directory.Apply(list);
+            LocalPrinters.Note(list);
+            foreach (var peer in list)
+            {
+                Store.RememberPerson(peer.Id, peer.Name);
+                if (peer.Online) _ = _node.FlushAsync(peer.Id);
+            }
+        };
         _node.ChatReceived += OnChat;
         _node.FileReceived += OnFile;
+        _node.Delivered += (peer, id) => Dispatcher.BeginInvoke(() => NoteDelivery(peer, id, null));
+        _node.SendFailed += (peer, id, error) => Dispatcher.BeginInvoke(() => NoteDelivery(peer, id, error));
+        _node.MessageSeen += (chat, ids) => Dispatcher.BeginInvoke(() => NoteSeen(chat, ids));
+        _node.PrintReceived += OnPrint;
+        _node.RoomReceived += OnRoom;
+        _node.RoomFileSaved += OnRoomFile;
+        _node.RoomHistory = () => Chats.Posts(RoomChat.Id);
+        _node.RoomFilePath = id => Chats.Find(RoomChat.Id, id)?.FilePath;
+        _node.SeedRoom(Chats.Posts(RoomChat.Id).Select(post => post.Id));
         _node.Start();
+        LocalPrinters.Start(
+            dataDir,
+            (peer, share, file) => _node.SendPrintAsync(peer, share, file),
+            (title, text) => Dispatcher.BeginInvoke(() => _tray?.Balloon(title, text)));
 
         if (!_demo)
         {
@@ -133,6 +162,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        try { LocalPrinters.Stop(); } catch { /* kapanış */ }
         try { _commandStop?.Cancel(); } catch { /* kapanış */ }
         try { _commandWait?.Dispose(); } catch { /* kapanış */ }
         try { _node?.Dispose(); } catch { /* kapanış */ }
@@ -225,26 +255,34 @@ public partial class App : Application
         var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         if (string.IsNullOrWhiteSpace(name)) name = path;
         var item = new ShareItem { Kind = "folder", Name = name, Path = path };
-        var (ok, share, error) = WindowsShareService.TryShareFolder(path, name, item.Id);
-        item.WindowsShare = ok ? share : null;
-        item.WindowsError = ok ? null : error;
         Store.AddShare(item);
         _node?.Announce();
-        return ok ? "Klasör paylaşıldı. Ağdaki bilgisayarlar görebilir." : "Klasör uygulama içinde açık. " + error;
+        return "Klasör paylaşıldı. Ağdaki bilgisayarlar görebilir.";
     }
 
     public string AddPrinter(string printerName)
     {
         if (Store.CopyShares().Any(s => s.Kind == "printer" && string.Equals(s.Path, printerName, StringComparison.OrdinalIgnoreCase)))
             return "Bu yazıcı zaten paylaşımda.";
+        if (!PrinterRelay.Installed(printerName))
+            return "Yazıcı bulunamadı.";
 
         var item = new ShareItem { Kind = "printer", Name = printerName, Path = printerName };
-        var (ok, share, error) = WindowsShareService.TrySharePrinter(printerName, item.Id);
-        item.WindowsShare = ok ? share : null;
-        item.WindowsError = ok ? null : error;
         Store.AddShare(item);
         _node?.Announce();
-        return ok ? "Yazıcı paylaşıldı." : "Yazıcı listede. " + error;
+        return "Yazıcı paylaşıldı. Karşı bilgisayar bunu kendi Yazıcılar klasörüne ekler.";
+    }
+
+    void ForgetWindowsErrors()
+    {
+        var dirty = false;
+        foreach (var share in Settings.Shares)
+        {
+            if (string.IsNullOrEmpty(share.WindowsError)) continue;
+            share.WindowsError = null;
+            dirty = true;
+        }
+        if (dirty) Store.Save();
     }
 
     public void RemoveShare(string id)
@@ -278,7 +316,14 @@ public partial class App : Application
 
     void OnChat(IncomingChat message)
     {
-        Chats.Add(message.PeerId, new ChatLine { Mine = false, Text = message.Text, Utc = DateTime.Now });
+        Chats.Add(message.PeerId, new ChatLine
+        {
+            Id = message.MessageId,
+            Mine = false,
+            AuthorId = message.PeerId,
+            Text = message.Text,
+            Utc = DateTime.Now
+        });
         Notice(message.PeerId, message.PeerName, message.Text);
     }
 
@@ -286,7 +331,9 @@ public partial class App : Application
     {
         Chats.Add(file.PeerId, new ChatLine
         {
+            Id = file.MessageId,
             Mine = false,
+            AuthorId = file.PeerId,
             FileName = file.FileName,
             FilePath = file.Path,
             Text = file.FileName,
@@ -294,6 +341,94 @@ public partial class App : Application
             Utc = DateTime.Now
         });
         Notice(file.PeerId, file.PeerName, "Dosya: " + file.FileName);
+    }
+
+    void NoteDelivery(string peerId, string messageId, string? error)
+    {
+        var line = Chats.Find(peerId, messageId);
+        if (line == null) return;
+        if (error == null)
+        {
+            line.Failed = false;
+            if (line.Status is "İletilecek" or "Gönderiliyor" || line.Status.Contains("bekleniyor", StringComparison.OrdinalIgnoreCase))
+                line.Status = line.IsFile ? "Gönderildi" : "";
+        }
+        else
+        {
+            line.Status = error;
+            line.Failed = error.Contains("reddetti", StringComparison.Ordinal);
+        }
+        Chats.Save(peerId);
+    }
+
+    void NoteSeen(string chatId, string ids)
+    {
+        var changed = false;
+        foreach (var id in ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var line = Chats.Find(chatId, id);
+            if (line == null || line.Seen) continue;
+            line.Seen = true;
+            changed = true;
+        }
+        if (changed) Chats.Save(chatId);
+    }
+
+    void OnRoom(RoomPost post)
+    {
+        var mine = post.AuthorId == Settings.ComputerId;
+        var when = post.UtcTicks > 0 ? new DateTime(post.UtcTicks, DateTimeKind.Utc).ToLocalTime() : DateTime.Now;
+        var line = new ChatLine
+        {
+            Id = post.Id,
+            Mine = mine,
+            Author = mine ? "" : post.Author,
+            AuthorId = post.AuthorId,
+            Text = post.Text,
+            FileName = post.FileName,
+            Status = string.IsNullOrEmpty(post.FileName) ? "" : "Almak için tıklayın",
+            Utc = when
+        };
+        if (!Chats.Add(RoomChat.Id, line)) return;
+        if (!mine)
+            Notice(RoomChat.Id, post.Author.Length == 0 ? "Ortak konuşma" : post.Author, string.IsNullOrEmpty(post.FileName) ? post.Text : "Dosya: " + post.FileName);
+    }
+
+    void OnRoomFile(RoomFile file)
+    {
+        var line = Chats.Find(RoomChat.Id, file.MessageId);
+        if (line == null)
+        {
+            var mine = file.AuthorId == Settings.ComputerId;
+            if (!Chats.Add(RoomChat.Id, new ChatLine
+            {
+                Id = file.MessageId,
+                Mine = mine,
+                Author = mine ? "" : file.Author,
+                AuthorId = file.AuthorId,
+                Text = file.FileName,
+                FileName = file.FileName,
+                FilePath = file.Path,
+                Status = "Alındı",
+                Utc = DateTime.Now
+            })) return;
+            if (!mine)
+                Notice(RoomChat.Id, file.Author.Length == 0 ? "Ortak konuşma" : file.Author, "Dosya: " + file.FileName);
+            return;
+        }
+
+        line.FilePath = file.Path;
+        if (string.IsNullOrEmpty(line.FileName)) line.FileName = file.FileName;
+        line.Status = "Alındı";
+        Chats.Save(RoomChat.Id);
+    }
+
+    void OnPrint(IncomingPrint job)
+    {
+        var text = job.Error == null
+            ? job.FileName + " yazıcıya gönderildi."
+            : job.FileName + " yazdırılamadı. " + job.Error;
+        _tray?.Balloon(job.PeerName, text);
     }
 
     void Notice(string peerId, string title, string text)
@@ -347,7 +482,7 @@ public partial class App : Application
             if (peer != null && share != null)
             {
                 if (share.Kind == "printer")
-                    await ShareConnect.ConnectPrinter(peer, share);
+                    await ShareConnect.ConnectPrinter(peer, share, null);
                 else
                     ShareConnect.OpenFolder(peer, share, false);
                 return;

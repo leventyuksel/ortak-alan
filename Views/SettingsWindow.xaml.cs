@@ -28,7 +28,8 @@ public partial class SettingsWindow : ChromeWindow
             _themes.Add(new SwatchVm
             {
                 Name = theme.Name,
-                Color = new SolidColorBrush(theme.Color),
+                Color = new SolidColorBrush(ThemeService.Tune(theme.Color, _appearance == "Karanlık")),
+                Mark = new SolidColorBrush(ThemeService.On(ThemeService.Tune(theme.Color, _appearance == "Karanlık"))),
                 Selected = theme.Name == _theme
             });
         }
@@ -53,6 +54,12 @@ public partial class SettingsWindow : ChromeWindow
     {
         if (sender is not FrameworkElement element || element.Tag is not string name) return;
         _appearance = name;
+        var dark = name == "Karanlık";
+        foreach (var item in _themes)
+        {
+            var theme = ThemeService.All.First(option => option.Name == item.Name);
+            item.Color = new SolidColorBrush(ThemeService.Tune(theme.Color, dark));
+        }
         Preview();
         MarkAppearance();
     }
