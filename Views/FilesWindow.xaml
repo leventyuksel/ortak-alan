@@ -224,9 +224,13 @@
         </StackPanel>
       </ScrollViewer>
     </Border>
-    <Border DockPanel.Dock="Bottom" Padding="14,6" BorderBrush="{DynamicResource ExLine}" BorderThickness="0,1,0,0">
-      <TextBlock x:Name="StatusText" Foreground="{DynamicResource ExMuted}" FontSize="12"/>
-    </Border>
+    <StackPanel DockPanel.Dock="Bottom">
+      <ProgressBar x:Name="TransferBar" Height="4" Minimum="0" Maximum="100" Visibility="Collapsed"
+                   Foreground="#0ABAB5" Background="#330ABAB5" BorderThickness="0"/>
+      <Border Padding="14,6" BorderBrush="{DynamicResource ExLine}" BorderThickness="0,1,0,0">
+        <TextBlock x:Name="StatusText" Foreground="{DynamicResource ExMuted}" FontSize="12"/>
+      </Border>
+    </StackPanel>
     <Border DockPanel.Dock="Left" Width="228" BorderBrush="{DynamicResource ExLine}" BorderThickness="0,0,1,0" Padding="8,8,4,8">
       <ListBox x:Name="Nav" BorderThickness="0" Background="Transparent"
                SelectionChanged="Nav_SelectionChanged"

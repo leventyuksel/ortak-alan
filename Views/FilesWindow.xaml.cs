@@ -38,6 +38,7 @@ public partial class FilesWindow : ChromeWindow
         ResizeMode = ResizeMode.CanResize;
         UseLogo(LogoImage);
         ApplyChrome();
+        TransferUi.Attach(this, TransferBar, StatusText);
         App.Me.Directory.Changed += OnDirectory;
         Closed += (_, _) => App.Me.Directory.Changed -= OnDirectory;
         _ = Load();

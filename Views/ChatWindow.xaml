@@ -234,6 +234,8 @@
             <Button x:Name="FileButton" Content="Dosya" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Padding="10,8" MinHeight="36" IsEnabled="False" Click="File_Click"/>
             <Button x:Name="SendButton" Content="Gönder" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Padding="12,8" MinHeight="36" IsEnabled="False" Click="Send_Click"/>
         </WrapPanel>
+        <ProgressBar x:Name="TransferBar" Height="4" Margin="0,8,0,0" Minimum="0" Maximum="100" Visibility="Collapsed"
+                     Foreground="#0ABAB5" Background="#330ABAB5" BorderThickness="0"/>
         <TextBlock x:Name="StatusText" Foreground="{DynamicResource Muted}" FontSize="12" Margin="2,8,0,0" TextWrapping="Wrap"/>
           </StackPanel>
         </Grid>

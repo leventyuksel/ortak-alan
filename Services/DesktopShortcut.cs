@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace OrtakAlan;
@@ -15,7 +16,7 @@ static class DesktopShortcut
             if (exe.Length == 0) return;
             var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
             var work = Path.GetDirectoryName(exe);
-            Write(Path.Combine(desktop, "Ortak Alan.lnk"), exe, "", work, exe + ",0", "Ortak Alan");
+            Write(Path.Combine(desktop, "Ortak Alan.lnk"), exe, "", work, AppIcon(work, exe), "Ortak Alan");
             var folder = SharedFolder(desktop);
             RemoveOldLink(desktop);
             TakeConnected(desktop, folder, exe);
@@ -93,28 +94,92 @@ static class DesktopShortcut
 
     public static void Write(string linkPath, string target, string? arguments, string? workingDirectory, string? icon, string description)
     {
-        var type = Type.GetTypeFromProgID("WScript.Shell");
-        if (type == null) return;
         var directory = Path.GetDirectoryName(linkPath);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
         var temp = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".lnk");
-        dynamic shell = Activator.CreateInstance(type)!;
-        dynamic shortcut = shell.CreateShortcut(temp);
-        shortcut.TargetPath = target;
-        shortcut.Arguments = arguments ?? "";
+        var link = (IShellLinkW)new ShellLink();
+        link.SetPath(target);
+        link.SetArguments(arguments ?? "");
+        link.SetShowCmd(1);
         if (!string.IsNullOrWhiteSpace(workingDirectory))
-            shortcut.WorkingDirectory = workingDirectory;
+            link.SetWorkingDirectory(workingDirectory);
+        if (!string.IsNullOrWhiteSpace(description))
+            link.SetDescription(description);
         if (!string.IsNullOrWhiteSpace(icon))
-            shortcut.IconLocation = icon;
-        shortcut.Description = description ?? "";
-        shortcut.Save();
+        {
+            var split = icon.LastIndexOf(',');
+            var file = split > 1 ? icon[..split] : icon;
+            var index = 0;
+            if (split > 1) int.TryParse(icon[(split + 1)..], out index);
+            link.SetIconLocation(file, index);
+        }
+        ((IPersistFile)link).Save(temp, true);
         if (File.Exists(linkPath))
         {
             File.SetAttributes(linkPath, FileAttributes.Normal);
             File.Delete(linkPath);
         }
         File.Move(temp, linkPath);
+        try { SHChangeNotify(0x2000, 0x0005, linkPath, IntPtr.Zero); }
+        catch { /* simge yenilenemezse kısayol yine durur */ }
+    }
+
+    static string AppIcon(string? work, string exe)
+    {
+        if (!string.IsNullOrEmpty(work))
+        {
+            var file = Path.Combine(work, "ikon.ico");
+            if (File.Exists(file)) return file;
+        }
+        return exe + ",0";
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    static extern void SHChangeNotify(int eventId, uint flags, string path, IntPtr item);
+
+    [ComImport]
+    [Guid("00021401-0000-0000-C000-000000000046")]
+    class ShellLink
+    {
+    }
+
+    [ComImport]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [Guid("000214F9-0000-0000-C000-000000000046")]
+    interface IShellLinkW
+    {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int cch, IntPtr data, uint flags);
+        void GetIDList(out IntPtr list);
+        void SetIDList(IntPtr list);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int cch);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder dir, int cch);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder args, int cch);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
+        void GetHotkey(out short hotkey);
+        void SetHotkey(short hotkey);
+        void GetShowCmd(out int show);
+        void SetShowCmd(int show);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int cch, out int index);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string file, int index);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, uint reserved);
+        void Resolve(IntPtr hwnd, uint flags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
+    }
+
+    [ComImport]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [Guid("0000010b-0000-0000-C000-000000000046")]
+    interface IPersistFile
+    {
+        void GetClassID(out Guid classId);
+        [PreserveSig] int IsDirty();
+        void Load([MarshalAs(UnmanagedType.LPWStr)] string fileName, uint mode);
+        void Save([MarshalAs(UnmanagedType.LPWStr)] string fileName, bool remember);
+        void SaveCompleted([MarshalAs(UnmanagedType.LPWStr)] string fileName);
+        void GetCurFile([MarshalAs(UnmanagedType.LPWStr)] out string fileName);
     }
 
     static string SharedFolder(string desktop)

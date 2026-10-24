@@ -9,7 +9,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>OrtakAlan</RootNamespace>
     <AssemblyName>OrtakAlan</AssemblyName>
-    <Version>1.2.5</Version>
+    <Version>1.2.6</Version>
     <Product>Ortak Alan</Product>
     <AssemblyTitle>Ortak Alan</AssemblyTitle>
     <Description>Klasör, yazıcı, mesaj ve dosya paylaşımı</Description>
@@ -17,6 +17,7 @@
     <ApplicationIcon>Assets\ikon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="Assets\ikon.ico" Link="ikon.ico" CopyToOutputDirectory="PreserveNewest" />
     <Resource Include="Assets\logo.png" />
     <Resource Include="Assets\ikon.jpg" />
     <Resource Include="Assets\ikon.png" />

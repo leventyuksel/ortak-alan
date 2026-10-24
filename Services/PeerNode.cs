@@ -10,6 +10,8 @@ using System.Text.Json.Nodes;
 
 namespace OrtakAlan;
 
+public readonly record struct TransferProgress(string Name, bool Incoming, long Done, long Total, bool Failed);
+
 public sealed class PeerNode : IDisposable
 {
     const int DiscoveryPort = 47470;
@@ -39,6 +41,7 @@ public sealed class PeerNode : IDisposable
     public event Action<string, string, string>? SendFailed;
     public event Action<string, string>? MessageSeen;
     public event Action<IncomingPrint>? PrintReceived;
+    public event Action<TransferProgress>? TransferChanged;
     public event Action<RoomPost>? RoomReceived;
     public event Action<RoomFile>? RoomFileSaved;
     public Func<IReadOnlyList<RoomPost>>? RoomHistory { get; set; }
@@ -392,18 +395,18 @@ public sealed class PeerNode : IDisposable
         }
 
         var name = info.Name;
-        await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", name), ("size", info.Length), ("room", id), ("who", _settings.ComputerName), ("from", _settings.ComputerId)));
-        await using var stream = File.OpenRead(path);
-        var buffer = new byte[64 * 1024];
-        var index = 0;
-        int read;
-        while ((read = await stream.ReadAsync(buffer, _cts.Token)) > 0)
+        try
         {
-            var slice = new byte[read];
-            Buffer.BlockCopy(buffer, 0, slice, 0, read);
-            await link.Send(Obj(("t", "file-chunk"), ("id", id), ("i", index++), ("data", Convert.ToBase64String(slice))));
+            await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", name), ("size", info.Length), ("room", id), ("who", _settings.ComputerName), ("from", _settings.ComputerId)));
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            await SendBody(link, id, stream, name, info.Length);
+            await link.Send(Obj(("t", "file-end"), ("id", id)));
         }
-        await link.Send(Obj(("t", "file-end"), ("id", id)));
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            await link.Send(Obj(("t", "file-error"), ("id", id), ("error", "Dosya kullanımda")));
+        }
     }
 
     Task CompleteRoomFile(Link link, IncomingTransfer transfer)
@@ -450,18 +453,33 @@ public sealed class PeerNode : IDisposable
             await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", name), ("size", info.Length)));
         else
             await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", name), ("size", info.Length), ("room", roomId), ("who", authorName ?? ""), ("from", authorId ?? "")));
-        await using var stream = File.OpenRead(path);
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        await SendBody(link, id, stream, name, info.Length);
+        await link.Send(Obj(("t", "file-end"), ("id", id)));
+        return null;
+    }
+
+    async Task SendBody(Link link, string id, Stream stream, string name, long total)
+    {
         var buffer = new byte[64 * 1024];
         var index = 0;
+        long sent = 0;
         int read;
         while ((read = await stream.ReadAsync(buffer, _cts.Token)) > 0)
         {
             var slice = new byte[read];
             Buffer.BlockCopy(buffer, 0, slice, 0, read);
             await link.Send(Obj(("t", "file-chunk"), ("id", id), ("i", index++), ("data", Convert.ToBase64String(slice))));
+            sent += read;
+            Report(name, false, sent, total, false);
         }
-        await link.Send(Obj(("t", "file-end"), ("id", id)));
-        return null;
+    }
+
+    void Report(string name, bool incoming, long done, long total, bool failed)
+    {
+        if (string.IsNullOrWhiteSpace(name)) name = "Dosya";
+        try { TransferChanged?.Invoke(new TransferProgress(name, incoming, done, total, failed)); }
+        catch (Exception ex) { Log.Write(ex); }
     }
 
     public async Task<string?> SendPrintAsync(string peerId, string shareId, string path)
@@ -558,7 +576,7 @@ public sealed class PeerNode : IDisposable
         var waiter = new DownloadWait { FinalPath = destination };
         link.Downloads[id] = waiter;
         await link.Send(Obj(("t", "get-file"), ("id", id), ("share", shareId), ("rel", rel)));
-        var finished = await Task.WhenAny(waiter.Done.Task, Task.Delay(TimeSpan.FromMinutes(3)));
+        var finished = await Task.WhenAny(waiter.Done.Task, Task.Delay(TimeSpan.FromMinutes(15)));
         if (finished != waiter.Done.Task) return ("Dosya gelmedi", null);
         try
         {
@@ -567,7 +585,7 @@ public sealed class PeerNode : IDisposable
         catch (Exception ex)
         {
             Log.Write(ex);
-            return ("Dosya alınamadı", null);
+            return (string.IsNullOrWhiteSpace(ex.Message) ? "Dosya alınamadı" : ex.Message, null);
         }
     }
 
@@ -600,9 +618,10 @@ public sealed class PeerNode : IDisposable
         await link.Send(Obj(("t", "put-begin"), ("id", id), ("share", shareId), ("rel", rel), ("name", info.Name), ("size", info.Length)));
         if (waiter.Task.IsCompleted) return await ReadFs(waiter, TimeSpan.FromSeconds(5), link, id);
 
-        await using var stream = File.OpenRead(path);
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         var buffer = new byte[64 * 1024];
         var index = 0;
+        long sent = 0;
         int read;
         while ((read = await stream.ReadAsync(buffer, _cts.Token)) > 0)
         {
@@ -610,6 +629,8 @@ public sealed class PeerNode : IDisposable
             var slice = new byte[read];
             Buffer.BlockCopy(buffer, 0, slice, 0, read);
             await link.Send(Obj(("t", "file-chunk"), ("id", id), ("i", index++), ("data", Convert.ToBase64String(slice))));
+            sent += read;
+            Report(info.Name, false, sent, info.Length, false);
         }
         await link.Send(Obj(("t", "file-end"), ("id", id)));
         var minutes = Math.Clamp((int)(info.Length / (1024 * 1024)) + 1, 1, 10);
@@ -978,24 +999,29 @@ public sealed class PeerNode : IDisposable
         }
 
         var info = new FileInfo(full);
-        if (!info.Exists || info.Length > MaxFileBytes)
+        if (!info.Exists)
         {
-            await link.Send(Obj(("t", "file-error"), ("id", id), ("error", "Dosya gönderilemedi")));
+            await link.Send(Obj(("t", "file-error"), ("id", id), ("error", "Dosya bulunamadı")));
+            return;
+        }
+        if (info.Length > MaxFileBytes)
+        {
+            await link.Send(Obj(("t", "file-error"), ("id", id), ("error", "Dosya 150 MB sınırını aşıyor")));
             return;
         }
 
-        await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", info.Name), ("size", info.Length)));
-        await using var stream = File.OpenRead(full);
-        var buffer = new byte[64 * 1024];
-        var index = 0;
-        int read;
-        while ((read = await stream.ReadAsync(buffer, _cts.Token)) > 0)
+        try
         {
-            var slice = new byte[read];
-            Buffer.BlockCopy(buffer, 0, slice, 0, read);
-            await link.Send(Obj(("t", "file-chunk"), ("id", id), ("i", index++), ("data", Convert.ToBase64String(slice))));
+            await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", info.Name), ("size", info.Length)));
+            await using var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            await SendBody(link, id, stream, info.Name, info.Length);
+            await link.Send(Obj(("t", "file-end"), ("id", id)));
         }
-        await link.Send(Obj(("t", "file-end"), ("id", id)));
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            await link.Send(Obj(("t", "file-error"), ("id", id), ("error", "Dosya kullanımda")));
+        }
     }
 
     void BeginIncoming(Link link, JsonElement message)
@@ -1027,6 +1053,7 @@ public sealed class PeerNode : IDisposable
         {
             Name = name,
             Temp = temp,
+            Total = Math.Max(0, size),
             Stream = File.Create(temp),
             Waiter = waiter,
             PrintShare = printShare.Length == 0 ? null : printShare,
@@ -1051,7 +1078,7 @@ public sealed class PeerNode : IDisposable
         return share != null && share.Path.Length > 0;
     }
 
-    static void WriteChunk(Link link, JsonElement message)
+    void WriteChunk(Link link, JsonElement message)
     {
         var id = Str(message, "id");
         if (!link.Incoming.TryGetValue(id, out var transfer) || transfer.Stream == null)
@@ -1062,6 +1089,8 @@ public sealed class PeerNode : IDisposable
         {
             var bytes = Convert.FromBase64String(data);
             transfer.Stream.Write(bytes, 0, bytes.Length);
+            transfer.Done += bytes.Length;
+            Report(transfer.Name, true, transfer.Done, transfer.Total, false);
         }
         catch (Exception ex)
         {
@@ -1082,6 +1111,7 @@ public sealed class PeerNode : IDisposable
         if (!string.IsNullOrEmpty(error))
         {
             try { if (File.Exists(transfer.Temp)) File.Delete(transfer.Temp); } catch { /* kapanış */ }
+            Report(transfer.Name, true, transfer.Done, transfer.Total, true);
             if (transfer.PrintShare != null)
             {
                 await link.Send(Obj(("t", "print-result"), ("id", id), ("error", error)));
@@ -1130,6 +1160,9 @@ public sealed class PeerNode : IDisposable
             Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
             if (File.Exists(finalPath)) File.Delete(finalPath);
             File.Move(transfer.Temp, finalPath);
+            var total = Math.Max(transfer.Total, transfer.Done);
+            if (total == 0) total = 1;
+            Report(transfer.Name, true, total, total, false);
             transfer.Waiter.Done.TrySetResult(finalPath);
             return;
         }
@@ -1403,6 +1436,7 @@ public sealed class PeerNode : IDisposable
         {
             Name = name,
             Temp = temp,
+            Total = Math.Max(0, size),
             Stream = File.Create(temp),
             DestPath = dest
         };
@@ -1934,6 +1968,8 @@ public sealed class PeerNode : IDisposable
         public string Author = "";
         public string AuthorId = "";
         public FileStream? Stream;
+        public long Total;
+        public long Done;
         public DownloadWait? Waiter;
     }
 

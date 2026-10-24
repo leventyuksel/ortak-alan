@@ -146,9 +146,19 @@ static class ShellDrag
                 var index = format.lindex < 0 ? 0 : format.lindex;
                 if (index < 0 || index >= items.Count) throw new COMException("Dosya yok", DvEFormatEtc);
                 var item = items[index];
-                Stream stream = item.IsDirectory || item.Open == null
-                    ? new MemoryStream()
-                    : item.Open();
+                Stream stream;
+                try
+                {
+                    stream = item.IsDirectory || item.Open == null
+                        ? new MemoryStream()
+                        : item.Open();
+                }
+                catch (Exception ex)
+                {
+                    LastError = ex is IOException ? ex.Message : "Dosya alınamadı";
+                    Log.Write(ex);
+                    throw new COMException(LastError, DvEFormatEtc);
+                }
                 medium.tymed = TYMED.TYMED_ISTREAM;
                 medium.unionmember = Marshal.GetIUnknownForObject(new StreamMedium(stream));
                 return;
@@ -227,7 +237,12 @@ static class ShellDrag
         static void Walk(ShellNode node, string relative, List<Flat> into)
         {
             relative = Clean(relative);
-            if (relative.Length == 0 || relative.Length >= 250) return;
+            if (relative.Length == 0) return;
+            if (relative.Length > 240)
+            {
+                relative = Path.GetFileName(relative);
+                if (relative.Length > 240) relative = relative[..240];
+            }
             if (!node.IsDirectory)
             {
                 into.Add(new Flat { Relative = relative, Size = node.Size, Open = node.Open });
@@ -280,9 +295,25 @@ static class ShellDrag
                 if (name.Length == 0 || name is "." or "..") continue;
                 foreach (var bad in Path.GetInvalidFileNameChars())
                     name = name.Replace(bad, '_');
-                if (name.Length > 0) kept.Add(name);
+                if (name.Length == 0) continue;
+                if (Reserved(name)) name = "_" + name;
+                kept.Add(name);
             }
             return string.Join("\\", kept);
+        }
+
+        static bool Reserved(string name)
+        {
+            var stem = Path.GetFileNameWithoutExtension(name);
+            if (stem.Equals("CON", StringComparison.OrdinalIgnoreCase) ||
+                stem.Equals("PRN", StringComparison.OrdinalIgnoreCase) ||
+                stem.Equals("AUX", StringComparison.OrdinalIgnoreCase) ||
+                stem.Equals("NUL", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (stem.Length != 4) return false;
+            var head = stem[..3];
+            var tail = stem[3];
+            return (head.Equals("COM", StringComparison.OrdinalIgnoreCase) || head.Equals("LPT", StringComparison.OrdinalIgnoreCase)) && tail is >= '1' and <= '9';
         }
 
         static bool Is(FORMATETC format, ushort id) => unchecked((ushort)format.cfFormat) == id;
@@ -360,10 +391,37 @@ static class ShellDrag
             if (plibNewPosition != IntPtr.Zero) Marshal.WriteInt64(plibNewPosition, position);
         }
 
-        public void SetSize(long libNewSize) => throw new NotSupportedException();
+        public void SetSize(long libNewSize) { }
 
-        public void CopyTo(IStream pstm, long cb, IntPtr pcbRead, IntPtr pcbWritten) =>
-            throw new NotSupportedException();
+        public void CopyTo(IStream pstm, long cb, IntPtr pcbRead, IntPtr pcbWritten)
+        {
+            var buffer = new byte[80 * 1024];
+            long readTotal = 0;
+            long writeTotal = 0;
+            var left = cb < 0 ? long.MaxValue : cb;
+            var written = Marshal.AllocHGlobal(4);
+            try
+            {
+                while (left > 0)
+                {
+                    var want = (int)Math.Min(buffer.Length, left);
+                    var read = _stream.Read(buffer, 0, want);
+                    if (read <= 0) break;
+                    pstm.Write(buffer, read, written);
+                    var count = Marshal.ReadInt32(written);
+                    if (count <= 0) count = read;
+                    readTotal += read;
+                    writeTotal += count;
+                    if (left != long.MaxValue) left -= read;
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(written);
+            }
+            if (pcbRead != IntPtr.Zero) Marshal.WriteInt64(pcbRead, readTotal);
+            if (pcbWritten != IntPtr.Zero) Marshal.WriteInt64(pcbWritten, writeTotal);
+        }
 
         public void Commit(int grfCommitFlags) { }
 

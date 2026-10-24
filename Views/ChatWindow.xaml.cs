@@ -26,6 +26,7 @@ public partial class ChatWindow : ChromeWindow
     {
         InitializeComponent();
         UseLogo(LogoImage, openKunye: false);
+        TransferUi.Attach(this, TransferBar, StatusText);
         WindowStyle = WindowStyle.SingleBorderWindow;
         ResizeMode = ResizeMode.CanResize;
         DockRight();

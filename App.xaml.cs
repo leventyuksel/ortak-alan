@@ -143,7 +143,7 @@ public partial class App : Application
         LocalPrinters.Start(
             dataDir,
             (peer, share, file) => _node.SendPrintAsync(peer, share, file),
-            (title, text) => Dispatcher.BeginInvoke(() => _tray?.Balloon(title, text)));
+            (title, text, error) => Dispatcher.BeginInvoke(() => PrintNotice.Show(title, text, error)));
 
         if (!_demo)
         {

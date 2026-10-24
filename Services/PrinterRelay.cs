@@ -35,24 +35,22 @@ static class PrinterRelay
     {
         if (!File.Exists(path)) return "Dosya bulunamadı";
         if (!Installed(printerName)) return "Yazıcı bu bilgisayarda yok";
+        var before = PrinterFault.Jobs(printerName);
         var ext = Path.GetExtension(path);
         try
         {
-            if (Images.Contains(ext)) return await Sta(() => PrintImage(printerName, path));
-            if (ext.Equals(".txt", StringComparison.OrdinalIgnoreCase) || ext.Equals(".log", StringComparison.OrdinalIgnoreCase))
-                return await Sta(() => PrintText(printerName, path));
-            if (ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
-            {
-                try { return await PrintPdf(printerName, path); }
-                catch (Exception ex)
-                {
-                    Log.Write(ex);
-                    return await Sta(() => PrintWithShell(printerName, path));
-                }
-            }
-            if (ext.Equals(".xps", StringComparison.OrdinalIgnoreCase) || ext.Equals(".oxps", StringComparison.OrdinalIgnoreCase))
-                return await Sta(() => PrintXps(printerName, path));
-            return await Sta(() => PrintWithShell(printerName, path));
+            string? error;
+            if (Images.Contains(ext)) error = await Sta(() => PrintImage(printerName, path));
+            else if (ext.Equals(".txt", StringComparison.OrdinalIgnoreCase) || ext.Equals(".log", StringComparison.OrdinalIgnoreCase))
+                error = await Sta(() => PrintText(printerName, path));
+            else if (ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+                error = await OnUi(() => PrintPdf(printerName, path));
+            else if (ext.Equals(".xps", StringComparison.OrdinalIgnoreCase) || ext.Equals(".oxps", StringComparison.OrdinalIgnoreCase))
+                error = await Sta(() => PrintXps(printerName, path));
+            else error = await Sta(() => PrintWithShell(printerName, path));
+            if (error != null) return error;
+            await Task.Delay(800);
+            return PrinterFault.Describe(printerName, before);
         }
         catch (Exception ex)
         {
@@ -95,7 +93,7 @@ static class PrinterRelay
             using var raw = new Bitmap(copy);
             using var bitmap = new Bitmap(raw);
             var name = pdf.PageCount == 1 ? job : job + " (" + (i + 1) + ")";
-            var error = await Sta(() => PrintOne(printer, name, bitmap, true));
+            var error = PrintOne(printer, name, bitmap, true);
             if (error != null) return error;
         }
         return null;
@@ -199,8 +197,14 @@ static class PrinterRelay
     {
         doc.PrinterSettings.PrinterName = printer;
         doc.DocumentName = job.Length == 0 ? "Ortak Alan" : job;
-        doc.PrintController = new StandardPrintController();
         return doc.PrinterSettings.IsValid;
+    }
+
+    static Task<string?> OnUi(Func<Task<string?>> work)
+    {
+        var app = System.Windows.Application.Current;
+        if (app == null || app.Dispatcher.CheckAccess()) return work();
+        return app.Dispatcher.InvokeAsync(work).Task.Unwrap();
     }
 
     static Task<string?> Sta(Func<string?> work)

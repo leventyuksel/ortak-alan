@@ -26,11 +26,11 @@ static class LocalPrinters
     static string _path = "";
     static volatile HashSet<string> _online = new(StringComparer.OrdinalIgnoreCase);
     static Func<string, string, string, Task<string?>>? _send;
-    static Action<string, string>? _notify;
+    static Action<string, string, bool>? _notify;
     static CancellationTokenSource? _loopStop;
     static int _started;
 
-    public static void Start(string dataDir, Func<string, string, string, Task<string?>> send, Action<string, string> notify)
+    public static void Start(string dataDir, Func<string, string, string, Task<string?>> send, Action<string, string, bool> notify)
     {
         if (Interlocked.Exchange(ref _started, 1) == 1) return;
         _dataDir = dataDir;
@@ -179,7 +179,7 @@ static class LocalPrinters
         var info = new FileInfo(path);
         if (info.Length < 8 || info.Length > MaxBody)
         {
-            if (info.Length > MaxBody) Tell("Yazıcı", "Yazdırma işi 150 MB sınırını aşıyor.");
+            if (info.Length > MaxBody) Tell("Yazıcı", "Yazdırma işi 150 MB sınırını aşıyor.", true);
             return;
         }
 
@@ -224,7 +224,7 @@ static class LocalPrinters
         try { File.Delete(path); } catch (Exception ex) { Log.Write(ex); }
         Log.Write("yazıcı işi " + info.Length + " " + dest);
         if (!_online.Contains(link.PeerId))
-            Tell(link.PeerName.Length == 0 ? "Yazıcı" : link.PeerName, link.ShareName + " için yazdırma işi bekliyor.");
+            Tell(Label(link), "Yazdırma işi bekliyor. Karşı bilgisayar açılınca gider.", true);
         _ = Pump();
     }
 
@@ -235,15 +235,15 @@ static class LocalPrinters
         var head = new byte[5];
         if (input.Read(head, 0, 5) < 5) return false;
         if (head[0] != (byte)'%' || head[1] != (byte)'P' || head[2] != (byte)'D' || head[3] != (byte)'F') return false;
-        using var output = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None);
-        output.Write(head, 0, 5);
-        input.CopyTo(output);
-        output.Flush();
-        var tailLen = (int)Math.Min(8192, output.Length);
+        var tailLen = (int)Math.Min(8192, input.Length);
         var tail = new byte[tailLen];
-        output.Position = output.Length - tailLen;
-        if (output.Read(tail, 0, tailLen) < tailLen) return false;
-        return Encoding.ASCII.GetString(tail).Contains("%%EOF", StringComparison.Ordinal);
+        input.Position = input.Length - tailLen;
+        if (input.Read(tail, 0, tailLen) < tailLen) return false;
+        if (!Encoding.ASCII.GetString(tail).Contains("%%EOF", StringComparison.Ordinal)) return false;
+        input.Position = 0;
+        using var output = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None);
+        input.CopyTo(output);
+        return true;
     }
 
     static async Task Pump()
@@ -276,12 +276,12 @@ static class LocalPrinters
                     if (error == null)
                     {
                         try { File.Delete(file); } catch (Exception ex) { Log.Write(ex); }
-                        Tell("Yazıcı", Path.GetFileName(file) + " yazıcıya ulaştı.");
+                        Tell(Label(peer, share), "Çıktı gitti.", false);
                         continue;
                     }
                     if (error == "Çevrimdışı") continue;
                     Hold[peer] = DateTime.UtcNow.Add(error.Contains("reddetti", StringComparison.OrdinalIgnoreCase) ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(25));
-                    if (Told.Add(file)) Tell("Yazıcı", error);
+                    if (Told.Add(file)) Tell(Label(peer, share), error, true);
                 }
             }
         }
@@ -414,9 +414,23 @@ static class LocalPrinters
         }
     }
 
-    static void Tell(string title, string text)
+    static string Label(PrinterLink link)
     {
-        try { _notify?.Invoke(title, text); }
+        if (link.ShareName.Length > 0) return link.ShareName;
+        return link.PeerName.Length == 0 ? "Yazıcı" : link.PeerName;
+    }
+
+    static string Label(string peerId, string shareId)
+    {
+        PrinterLink? link;
+        lock (ListLock)
+            link = _links.FirstOrDefault(item => Safe(item.PeerId) == peerId && Safe(item.ShareId) == shareId);
+        return link == null ? "Yazıcı" : Label(link);
+    }
+
+    static void Tell(string title, string text, bool error)
+    {
+        try { _notify?.Invoke(title, text, error); }
         catch (Exception ex) { Log.Write(ex); }
     }
 
