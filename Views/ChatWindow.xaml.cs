@@ -21,7 +21,7 @@ public partial class ChatWindow : ChromeWindow
     bool _busy;
     bool _holdSelection;
     bool _favoritesOnly;
-    Storyboard? _blink;
+    SolidColorBrush? _frameBrush;
     public string? SelectedId { get; private set; }
 
     public ChatWindow()
@@ -181,16 +181,7 @@ public partial class ChatWindow : ChromeWindow
     void PaintFavorites()
     {
         FavoritesButton.ToolTip = _favoritesOnly ? "Tüm mesajları göster" : "Sadece favori mesajları göster";
-        if (_favoritesOnly)
-        {
-            FavoritesButton.SetResourceReference(BackgroundProperty, "Accent");
-            FavoritesButton.SetResourceReference(BorderBrushProperty, "Accent");
-            FavoritesButton.SetResourceReference(ForegroundProperty, "OnAccent");
-            return;
-        }
-        FavoritesButton.ClearValue(BackgroundProperty);
-        FavoritesButton.ClearValue(BorderBrushProperty);
-        FavoritesButton.ClearValue(ForegroundProperty);
+        FavoritesButton.Tag = _favoritesOnly ? "on" : null;
     }
 
     void Favorite_Click(object sender, RoutedEventArgs e)
@@ -216,16 +207,7 @@ public partial class ChatWindow : ChromeWindow
 
     void PaintQuick()
     {
-        if (QuickPanel.Visibility == Visibility.Visible)
-        {
-            QuickButton.SetResourceReference(BackgroundProperty, "Accent");
-            QuickButton.SetResourceReference(BorderBrushProperty, "Accent");
-            QuickButton.SetResourceReference(ForegroundProperty, "OnAccent");
-            return;
-        }
-        QuickButton.ClearValue(BackgroundProperty);
-        QuickButton.ClearValue(BorderBrushProperty);
-        QuickButton.ClearValue(ForegroundProperty);
+        QuickButton.Tag = QuickPanel.Visibility == Visibility.Visible ? "on" : null;
     }
 
     void LoadQuick()
@@ -665,26 +647,26 @@ public partial class ChatWindow : ChromeWindow
 
     void StartBlink()
     {
-        if (_blink != null) return;
-        var animation = new DoubleAnimation(1, 0.2, TimeSpan.FromMilliseconds(420))
+        if (_frameBrush != null) return;
+        _frameBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xD0, 0x00));
+        LogoFrame.BorderThickness = new Thickness(2.5);
+        LogoFrame.BorderBrush = _frameBrush;
+        _frameBrush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(
+            Color.FromArgb(255, 0xFF, 0xD0, 0x00),
+            Color.FromArgb(40, 0xFF, 0xD0, 0x00),
+            TimeSpan.FromMilliseconds(480))
         {
             AutoReverse = true,
             RepeatBehavior = RepeatBehavior.Forever
-        };
-        Storyboard.SetTarget(animation, LogoFrame);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.OpacityProperty));
-        _blink = new Storyboard();
-        _blink.Children.Add(animation);
-        _blink.Begin(this, true);
+        });
     }
 
     void StopBlink()
     {
-        if (_blink != null)
-        {
-            _blink.Stop(this);
-            _blink = null;
-        }
+        _frameBrush?.BeginAnimation(SolidColorBrush.ColorProperty, null);
+        _frameBrush = null;
+        LogoFrame.ClearValue(Border.BorderBrushProperty);
+        LogoFrame.BorderThickness = new Thickness(1.5);
         LogoFrame.Opacity = 1;
     }
 

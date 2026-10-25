@@ -74,6 +74,22 @@
     padding: 8px 12px;
     page-break-inside: avoid;
   }
+  figure {
+    margin: 8px 0 12px;
+    page-break-inside: avoid;
+  }
+  figure img {
+    width: 100%;
+    height: auto;
+    border: 1px solid #E6E8EE;
+    border-radius: 8px;
+  }
+  figure.tall img { width: 72%; }
+  figcaption {
+    color: #4B5563;
+    font-size: 9pt;
+    margin-top: 4px;
+  }
 </style>
 </head>
 <body>
@@ -130,6 +146,10 @@
 
 <h3>Mesaj silmek</h3>
 <p>Konuşmanın tamamını silen bir komut yoktur. Yalnızca tek mesaj silinir. Mesajın üzerine sağ tıklayıp Sil derseniz o mesaj sizin ekranınızdan kalkar. Karşı tarafta metin durur ve silindiği anlaşılsın diye üzeri çizili görünür. Henüz karşıya gitmemiş bir mesaj silinirse oraya hiç ulaşmaz. Çizginin görünmesi için iki bilgisayarda da güncel programın açık olması gerekir.</p>
+<figure class="tall">
+  <img src="gorsel/01-sohbet.png" alt="Sohbet penceresi"/>
+  <figcaption>Sohbet. Bağlantının altı çizilidir ve tıklanınca açılır. Dolu yıldız favoridedir. Karşı tarafın sildiği mesajın üzeri çizilidir. Gelen dosya kartında Al yazar.</figcaption>
+</figure>
 
 <h3>Klasör paylaşmak</h3>
 <p>Üstteki Klasör paylaş ile bir klasör seçilir. Klasör, Paylaşımlar penceresinde listelenir. Karşı taraf kişiye sağ tıklayıp paylaşılan klasöre bağlanır ya da Paylaşılan Dosyalar penceresinden o bilgisayarı açar. Bu pencerede dosya açılır, kopyalanır, yapıştırılır, adı değiştirilir ve silinir. Yeni klasör de oluşturulabilir. Masaüstündeki Paylaşılan Dosyalar klasörü aynı yere açılır.</p>
@@ -142,9 +162,17 @@
 
 <h3>Ayarlar ve güncelleme</h3>
 <p>Ayarlardan bilgisayar adı, Windows ile açılma ve hazır temalardan biri değişir. Beş aydınlık ve beş karanlık tema vardır; yazı rengi temayla birlikte gelir. Sağ üstteki işaret künyeyi açar. Künyede sürüm görünür ve güncelleme kurulur. Yeni sürüm varken penceredeki sarı ünlem de kurulumu başlatır.</p>
+<figure>
+  <img src="gorsel/02-ayarlar.png" alt="Ayarlar ve temalar"/>
+  <figcaption>Ayarlar. Aydınlık temalar Kağıt, Keten, Sis, Nane ve Lavanta. Karanlık temalar Gece, Kömür, Okyanus, Orman ve Mürekkep. Seçili temanın çevresi belirgindir.</figcaption>
+</figure>
 
 <h3>Lisans</h3>
 <p>Program 30 günlük deneme ile açılır. Süre dolunca lisans önerilir; program çalışmayı sürdürür. Lisanssız en çok beş kullanıcı eklenir. Altıncı kullanıcı için lisans gerekir. Anahtar künyedeki kutuya yapıştırılıp kaydedilir. Anahtar bir bilgisayarda girilince aynı ağdaki diğer bilgisayarlar programı yeniden açtığında lisanslı olur. Program klasörü başka bilgisayara kopyalanırsa orada açılmaz.</p>
+<figure class="tall">
+  <img src="gorsel/03-kunye.png" alt="Künye ve lisans"/>
+  <figcaption>Künye. Deneme süresi, kullanıcı sayısı, lisans kutusu ve iletişim adresi buradadır. Anahtar yapıştırılıp Lisansı kaydet ile işlenir.</figcaption>
+</figure>
 
 <div class="note">
   <strong>Birlikte çalışması için</strong>

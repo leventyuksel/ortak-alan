@@ -180,6 +180,8 @@ public partial class App : Application
             ShowChat();
             ListenForCommands();
         }
+        else if (HasFlag(e.Args, "--pencere"))
+            ShowChat();
         _ = UpdateService.LookAsync();
         if (LicenseService.ShouldRemind())
             Views.LicenseWindow.ShowTrial();

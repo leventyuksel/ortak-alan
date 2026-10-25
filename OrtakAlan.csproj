@@ -9,7 +9,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>OrtakAlan</RootNamespace>
     <AssemblyName>OrtakAlan</AssemblyName>
-    <Version>2.0.1</Version>
+    <Version>2.0.2</Version>
     <Product>Ortak Alan</Product>
     <AssemblyTitle>Ortak Alan</AssemblyTitle>
     <Description>Klasör, yazıcı, mesaj ve dosya paylaşımı</Description>

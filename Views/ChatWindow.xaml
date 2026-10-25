@@ -80,16 +80,28 @@
           </Button>
         </StackPanel>
         </ScrollViewer>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-          <Button x:Name="UpdateMark" Style="{StaticResource GhostButton}" Visibility="Collapsed" Click="Update_Click" Cursor="Hand" Padding="4,0" MinWidth="22" MinHeight="28" Margin="0,0,2,0" VerticalAlignment="Center">
-            <TextBlock Text="!" Foreground="#FFD000" FontSize="22" FontWeight="Bold" VerticalAlignment="Center"/>
-          </Button>
-          <Button Style="{StaticResource GhostButton}" Click="Kunye_Click" Cursor="Hand" ToolTip="Künye" Padding="2" MinHeight="28" VerticalAlignment="Center">
-            <Border x:Name="LogoFrame" Width="28" Height="28" CornerRadius="7" Background="White">
-              <Image x:Name="LogoImage" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        <Grid Grid.Column="1" Width="36" Height="36" VerticalAlignment="Center">
+          <Button Width="36" Height="36" Padding="0" Click="Kunye_Click" Cursor="Hand" ToolTip="Künye" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <ContentPresenter/>
+              </ControlTemplate>
+            </Button.Template>
+            <Border x:Name="LogoFrame" Width="36" Height="36" CornerRadius="18" Background="White" BorderBrush="{DynamicResource Line}" BorderThickness="1.5">
+              <Image x:Name="LogoImage" Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
           </Button>
-        </StackPanel>
+          <Button x:Name="UpdateMark" Width="15" Height="15" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,0,0" Padding="0"
+                  Visibility="Collapsed" Click="Update_Click" Cursor="Hand" Focusable="False" Panel.ZIndex="2">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border Background="#FFD000" CornerRadius="8" Width="15" Height="15">
+                  <TextBlock Text="!" FontSize="11" FontWeight="Bold" Foreground="#1C1403" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0"/>
+                </Border>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
+        </Grid>
       </Grid>
 
       <Grid Grid.Row="1">
@@ -177,13 +189,13 @@
               <TextBlock x:Name="ChatHint" Text="Konuşmada ara" Foreground="{DynamicResource Muted}" Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" FontSize="13"/>
             </Grid>
             <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
-              <Button x:Name="FavoritesButton" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Padding="10,6" MinHeight="32" IsEnabled="False" Click="Favorites_Click" ToolTip="Sadece favori mesajları göster">
+              <Button x:Name="FavoritesButton" Style="{StaticResource FilterButton}" Margin="0,0,8,0" Padding="10,6" MinHeight="32" IsEnabled="False" Click="Favorites_Click" ToolTip="Sadece favori mesajları göster">
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Text="&#xE734;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                   <TextBlock Text="Favoriler" VerticalAlignment="Center"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="QuickButton" Style="{StaticResource SecondaryButton}" Padding="10,6" MinHeight="32" IsEnabled="False" Click="Quick_Click" ToolTip="Kayıtlı mesajları aç">
+              <Button x:Name="QuickButton" Style="{StaticResource FilterButton}" Padding="10,6" MinHeight="32" IsEnabled="False" Click="Quick_Click" ToolTip="Kayıtlı mesajları aç">
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                   <TextBlock Text="Sabit mesajlar" VerticalAlignment="Center"/>
