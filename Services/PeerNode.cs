@@ -40,11 +40,13 @@ public sealed class PeerNode : IDisposable
     public event Action<string, string>? Delivered;
     public event Action<string, string, string>? SendFailed;
     public event Action<string, string>? MessageSeen;
+    public event Action<string, string>? MessageStruck;
     public event Action<IncomingPrint>? PrintReceived;
     public event Action<TransferProgress>? TransferChanged;
     public event Action<RoomPost>? RoomReceived;
     public event Action<RoomFile>? RoomFileSaved;
     public Func<IReadOnlyList<RoomPost>>? RoomHistory { get; set; }
+    public Func<IReadOnlyList<string>>? RoomStrikes { get; set; }
     public Func<string, string?>? RoomFilePath { get; set; }
     readonly HashSet<string> _roomSeen = new();
     readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _roomFetches = new();
@@ -82,6 +84,11 @@ public sealed class PeerNode : IDisposable
     {
         if (text.Length > 4000) text = text[..4000];
         if (messageId.Length == 0) messageId = Guid.NewGuid().ToString("N");
+        if (!_store.Allows(peerId))
+        {
+            LicenseService.NotifySeat();
+            return LicenseService.SeatStatus;
+        }
         if (Rejected(peerId)) return "Bu bilgisayar isteği reddetti.";
         if (!IsOnline(peerId))
         {
@@ -101,6 +108,58 @@ public sealed class PeerNode : IDisposable
         await link.Send(Obj(("t", "chat"), ("id", messageId), ("text", text)));
         _ = FlushAsync(peerId);
         return null;
+    }
+
+    public bool CancelPending(string peerId, string messageId)
+    {
+        if (peerId.Length == 0 || messageId.Length == 0) return false;
+        lock (_outLock)
+        {
+            var box = Outbox();
+            var hit = box.Any(item => item.PeerId == peerId && item.Id == messageId && item.Kind is "text" or "file");
+            if (!hit) return false;
+            box.RemoveAll(item => item.PeerId == peerId && item.Id == messageId && item.Kind is "text" or "file");
+            SaveOut();
+            return true;
+        }
+    }
+
+    public async Task SendDropAsync(string peerId, string messageId)
+    {
+        if (peerId.Length == 0 || messageId.Length == 0) return;
+        if (TryLink(peerId, out var open) && open != null)
+        {
+            try
+            {
+                await open.Send(Obj(("t", "drop"), ("id", messageId)));
+                return;
+            }
+            catch (Exception ex)
+            {
+                Log.Write(ex);
+            }
+        }
+        Enqueue(new OutboxItem { PeerId = peerId, Id = messageId, Kind = "drop" });
+        if (IsOnline(peerId)) _ = FlushAsync(peerId);
+    }
+
+    public async Task BroadcastDropAsync(string messageId)
+    {
+        if (messageId.Length == 0) return;
+        var body = Obj(("t", "drop"), ("chat", RoomChat.Id), ("id", messageId));
+        foreach (var peerId in OnlineIds())
+        {
+            try
+            {
+                var (link, _) = await EnsureAsync(peerId);
+                if (link == null) continue;
+                await link.Send(body);
+            }
+            catch (Exception ex)
+            {
+                Log.Write(ex);
+            }
+        }
     }
 
     public async Task<string?> SendSeenAsync(string peerId, string chatId, IReadOnlyList<string> ids)
@@ -132,7 +191,7 @@ public sealed class PeerNode : IDisposable
         {
             if (!IsOnline(peerId) || Holding(peerId)) return;
             var items = CopyOut(peerId);
-            foreach (var item in items.Where(item => item.Kind != "seen"))
+            foreach (var item in items.Where(item => item.Kind is "text" or "file"))
             {
                 if (!IsOnline(peerId)) return;
                 string? error;
@@ -167,8 +226,10 @@ public sealed class PeerNode : IDisposable
                 Ui(() => Delivered?.Invoke(peerId, sent));
             }
 
+            if (!IsOnline(peerId)) return;
             var receipts = CopyOut(peerId).Where(item => item.Kind == "seen").ToList();
-            if (receipts.Count == 0 || !IsOnline(peerId)) return;
+            var drops = CopyOut(peerId).Where(item => item.Kind == "drop").ToList();
+            if (receipts.Count == 0 && drops.Count == 0) return;
             if (!TryLink(peerId, out var seenLink) || seenLink == null)
             {
                 if (!_store.IsApproved(peerId)) return;
@@ -186,6 +247,11 @@ public sealed class PeerNode : IDisposable
                 await seenLink.Send(Obj(("t", "seen"), ("chat", group.Key), ("ids", string.Join(",", group.Select(item => item.Id).Distinct()))));
                 foreach (var item in group) RemoveOut(item);
             }
+            foreach (var item in drops)
+            {
+                await seenLink.Send(Obj(("t", "drop"), ("id", item.Id)));
+                RemoveOut(item);
+            }
         }
         catch (Exception ex)
         {
@@ -202,6 +268,11 @@ public sealed class PeerNode : IDisposable
         if (!File.Exists(path)) return "Dosya bulunamadı";
         var info = new FileInfo(path);
         if (info.Length > MaxFileBytes) return "Dosya 150 MB sınırını aşıyor";
+        if (!_store.Allows(peerId))
+        {
+            LicenseService.NotifySeat();
+            return LicenseService.SeatStatus;
+        }
         if (Rejected(peerId)) return "Bu bilgisayar isteği reddetti.";
         var id = string.IsNullOrEmpty(messageId) ? Guid.NewGuid().ToString("N") : messageId;
         if (!IsOnline(peerId))
@@ -326,18 +397,31 @@ public sealed class PeerNode : IDisposable
 
     async Task SendRoomHistory(Link link)
     {
-        IReadOnlyList<RoomPost>? posts;
+        IReadOnlyList<RoomPost>? posts = null;
         try { posts = RoomHistory?.Invoke(); }
-        catch (Exception ex)
+        catch (Exception ex) { Log.Write(ex); }
+        if (posts != null)
         {
-            Log.Write(ex);
-            return;
+            foreach (var post in posts.TakeLast(80))
+            {
+                if (post.Id.Length == 0) continue;
+                try { await link.Send(RoomObj(post.Id, post.Text, post.FileName ?? "", post.Author, post.AuthorId, post.UtcTicks, post.Struck)); }
+                catch (Exception ex)
+                {
+                    Log.Write(ex);
+                    return;
+                }
+            }
         }
-        if (posts == null || posts.Count == 0) return;
-        foreach (var post in posts.TakeLast(80))
+
+        IReadOnlyList<string>? strikes = null;
+        try { strikes = RoomStrikes?.Invoke(); }
+        catch (Exception ex) { Log.Write(ex); }
+        if (strikes == null) return;
+        foreach (var id in strikes)
         {
-            if (post.Id.Length == 0) continue;
-            try { await link.Send(RoomObj(post.Id, post.Text, post.FileName ?? "", post.Author, post.AuthorId, post.UtcTicks)); }
+            if (id.Length == 0) continue;
+            try { await link.Send(Obj(("t", "drop"), ("chat", RoomChat.Id), ("id", id))); }
             catch (Exception ex)
             {
                 Log.Write(ex);
@@ -358,18 +442,19 @@ public sealed class PeerNode : IDisposable
         var author = Str(message, "name");
         if (author.Length == 0) author = link.PeerName;
         var ticks = LongOf(message, "utc");
-        var post = new RoomPost(id, text, author, authorId, file.Length == 0 ? null : file, ticks);
+        var struck = BoolOf(message, "struck");
+        var post = new RoomPost(id, text, author, authorId, file.Length == 0 ? null : file, ticks, struck);
         Ui(() => RoomReceived?.Invoke(post));
         var except = link.PeerId;
-        _ = RelayRoom(except, id, text, file, author, authorId, ticks);
+        _ = RelayRoom(except, id, text, file, author, authorId, ticks, struck);
     }
 
-    async Task RelayRoom(string exceptPeerId, string id, string text, string file, string author, string authorId, long ticks)
+    async Task RelayRoom(string exceptPeerId, string id, string text, string file, string author, string authorId, long ticks, bool struck)
     {
         foreach (var other in _links.Values.ToArray())
         {
             if (!other.Alive || other.PeerId == exceptPeerId || other.PeerId.Length == 0) continue;
-            try { await other.Send(RoomObj(id, text, file, author, authorId, ticks)); }
+            try { await other.Send(RoomObj(id, text, file, author, authorId, ticks, struck)); }
             catch (Exception ex) { Log.Write(ex); }
         }
     }
@@ -436,8 +521,12 @@ public sealed class PeerNode : IDisposable
         return Task.CompletedTask;
     }
 
-    static JsonObject RoomObj(string id, string text, string file, string author, string authorId, long ticks) =>
-        Obj(("t", "room"), ("id", id), ("text", text), ("file", file), ("name", author), ("from", authorId), ("utc", ticks));
+    static JsonObject RoomObj(string id, string text, string file, string author, string authorId, long ticks, bool struck = false)
+    {
+        var body = Obj(("t", "room"), ("id", id), ("text", text), ("file", file), ("name", author), ("from", authorId), ("utc", ticks));
+        if (struck) body["struck"] = true;
+        return body;
+    }
 
     public async Task<string?> SendFileAsync(string peerId, string path, string? transferId, string? roomId, string? authorId, string? authorName)
     {
@@ -683,6 +772,13 @@ public sealed class PeerNode : IDisposable
     async Task<(Link? Link, string? Error)> EnsureAsync(string peerId)
     {
         if (_denied.Contains(peerId)) return (null, "Bu bilgisayar isteği reddetti.");
+        if (_links.TryGetValue(peerId, out var live) && live.Alive)
+            return (live, null);
+        if (!_store.Allows(peerId))
+        {
+            LicenseService.NotifySeat();
+            return (null, LicenseService.SeatStatus);
+        }
         PeerState? peer;
         lock (_peerLock) _peers.TryGetValue(peerId, out peer);
         if (peer == null || !peer.IsOnline || peer.Port <= 0)
@@ -714,7 +810,9 @@ public sealed class PeerNode : IDisposable
         connect.CancelAfter(TailscalePeers.IsAddress(peer.Ip) ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(5));
         await client.ConnectAsync(peer.Ip, peer.Port, connect.Token);
         var link = new Link(client, peer.Id, peer.Name);
-        await link.Send(Obj(("t", "intro"), ("id", _settings.ComputerId), ("name", _settings.ComputerName)));
+        var intro = Obj(("t", "intro"), ("id", _settings.ComputerId), ("name", _settings.ComputerName));
+        AttachLicense(intro);
+        await link.Send(intro);
         using var wait = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         wait.CancelAfter(TimeSpan.FromSeconds(90));
         var reply = await link.ReadOne(wait.Token);
@@ -742,6 +840,7 @@ public sealed class PeerNode : IDisposable
             return (null, "Bağlanılamadı");
         }
 
+        TakeLicense(reply.Value);
         ReplaceLink(link);
         _ = Task.Run(() => ReadLoop(link));
         _ = SendRoomHistory(link);
@@ -790,10 +889,13 @@ public sealed class PeerNode : IDisposable
 
             link.PeerId = id;
             link.PeerName = string.IsNullOrWhiteSpace(name) ? "Bilgisayar" : name;
+            TakeLicense(first.Value);
             var decision = await ApproveOnce(id, link.PeerName);
             if (decision == true)
             {
-                await link.Send(Obj(("t", "welcome")));
+                var welcome = Obj(("t", "welcome"));
+                AttachLicense(welcome);
+                await link.Send(welcome);
                 ReplaceLink(link);
                 await SendRoomHistory(link);
                 await ReadLoop(link);
@@ -828,6 +930,11 @@ public sealed class PeerNode : IDisposable
         {
             if (_store.IsApproved(id)) return true;
             if (_store.IsRejected(id)) return false;
+            if (!_store.Allows(id))
+            {
+                LicenseService.NotifySeat();
+                return null;
+            }
             var decision = await _approve(id, name);
             if (decision == true) _store.Decide(id, name, true);
             else if (decision == false) _store.Decide(id, name, false);
@@ -890,6 +997,14 @@ public sealed class PeerNode : IDisposable
                 if (chat.Length == 0) chat = link.PeerId;
                 var ids = Str(message, "ids");
                 Ui(() => MessageSeen?.Invoke(chat, ids));
+                break;
+            }
+            case "drop":
+            {
+                var chat = Str(message, "chat");
+                if (chat.Length == 0) chat = link.PeerId;
+                var id = Str(message, "id");
+                if (id.Length > 0) Ui(() => MessageStruck?.Invoke(chat, id));
                 break;
             }
             case "room":
@@ -1585,9 +1700,16 @@ public sealed class PeerNode : IDisposable
         }
     }
 
+    static readonly object BeaconFile = new();
+
     void WriteBeacon()
     {
         if (_tcpPort <= 0) return;
+        lock (BeaconFile) WriteBeaconLocked();
+    }
+
+    void WriteBeaconLocked()
+    {
         var shares = new JsonArray();
         foreach (var share in _store.CopyShares())
         {
@@ -1610,6 +1732,8 @@ public sealed class PeerNode : IDisposable
         };
         if (TailscalePeers.Self is { } tailscale)
             obj["ts"] = tailscale.ToString();
+        var license = LicenseService.Key;
+        if (license.Length > 0) obj["lic"] = license;
         var json = obj.ToJsonString();
         var path = BeaconPath();
         var temp = path + ".tmp";
@@ -1694,6 +1818,8 @@ public sealed class PeerNode : IDisposable
 
         var id = Str(root, "id");
         if (id.Length == 0 || id == _settings.ComputerId) return;
+        var license = Str(root, "lic");
+        if (license.Length > 0) LicenseService.AcceptShared(license);
         var name = Str(root, "name");
         var port = root.TryGetProperty("port", out var portEl) && portEl.TryGetInt32(out var portNo) ? portNo : 0;
         IPAddress? announced = null;
@@ -1903,12 +2029,31 @@ public sealed class PeerNode : IDisposable
     static string Str(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
 
+    static bool BoolOf(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value)) return false;
+        if (value.ValueKind == JsonValueKind.True) return true;
+        return value.ValueKind == JsonValueKind.String && string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase);
+    }
+
     static long LongOf(JsonElement element, string name)
     {
         if (!element.TryGetProperty(name, out var value)) return 0;
         if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)) return number;
         if (value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), out var text)) return text;
         return 0;
+    }
+
+    static void AttachLicense(JsonObject message)
+    {
+        var key = LicenseService.Key;
+        if (key.Length > 0) message["lic"] = key;
+    }
+
+    static void TakeLicense(JsonElement message)
+    {
+        var key = Str(message, "lic");
+        if (key.Length > 0) LicenseService.AcceptShared(key);
     }
 
     static JsonObject Obj(params (string Key, object? Value)[] fields)

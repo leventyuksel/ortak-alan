@@ -25,8 +25,14 @@ public partial class KunyeWindow : ChromeWindow
         InitializeComponent();
         UseLogo(LogoImage, openKunye: false);
         VersionText.Text = "Sürüm " + AppInfo.Display;
+        ShowLicense();
+        LicenseService.Changed += RefreshLicense;
         UpdateService.PendingChanged += ShowUpdate;
-        Closed += (_, _) => UpdateService.PendingChanged -= ShowUpdate;
+        Closed += (_, _) =>
+        {
+            LicenseService.Changed -= RefreshLicense;
+            UpdateService.PendingChanged -= ShowUpdate;
+        };
         ShowUpdate();
     }
 
@@ -103,11 +109,45 @@ public partial class KunyeWindow : ChromeWindow
         Note(error);
     }
 
-    void Phone_Click(object sender, RoutedEventArgs e)
+    void RefreshLicense()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(RefreshLicense);
+            return;
+        }
+        ShowLicense();
+    }
+
+    void ShowLicense()
+    {
+        LicenseState.Text = LicenseService.TrialLine();
+        UserState.Text = LicenseService.UsersLine(App.Me.Store.UserCount());
+        if (LicenseService.IsLicensed)
+            LicenseBox.Text = App.Me.Settings.LicenseKey;
+    }
+
+    void SaveLicense_Click(object sender, RoutedEventArgs e)
+    {
+        if (!LicenseService.TryAccept(LicenseBox.Text, out var error))
+        {
+            LicenseError.SetResourceReference(ForegroundProperty, "Danger");
+            LicenseError.Text = error;
+            LicenseError.Visibility = Visibility.Visible;
+            return;
+        }
+
+        LicenseError.SetResourceReference(ForegroundProperty, "Accent");
+        LicenseError.Text = "Lisans kaydedildi.";
+        LicenseError.Visibility = Visibility.Visible;
+        ShowLicense();
+    }
+
+    void Mail_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            Process.Start(new ProcessStartInfo("tel:05552578072") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo("mailto:" + LicenseCodec.Contact) { UseShellExecute = true });
         }
         catch (Exception ex)
         {

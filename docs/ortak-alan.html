@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"/>
+<title>Ortak Alan</title>
+<style>
+  @page { size: A4; margin: 13mm 15mm 14mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", sans-serif;
+    color: #111827;
+    font-size: 10.4pt;
+    line-height: 1.38;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  header.top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 14px;
+    border-bottom: 3px solid #0C7F7B;
+    margin-bottom: 12px;
+  }
+  .mark {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid #E6E8EE;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+  .mark img { width: 34px; height: 34px; }
+  h1 { font-size: 26pt; line-height: 1; margin: 0; letter-spacing: -0.4px; }
+  .brand { color: #6B7280; font-size: 11pt; margin-top: 4px; }
+  h2 {
+    font-size: 13.5pt;
+    margin: 12px 0 6px;
+    color: #0C7F7B;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 11.5pt;
+    margin: 9px 0 3px;
+    page-break-after: avoid;
+  }
+  p { margin: 0 0 6px; }
+  .lead { font-size: 12pt; line-height: 1.5; margin-bottom: 10px; }
+  ul, ol { margin: 4px 0 8px; padding-left: 18px; }
+  li { margin: 0 0 2px; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin: 6px 0 2px;
+  }
+  .card {
+    border: 1px solid #E6E8EE;
+    background: #F7F8FA;
+    border-radius: 8px;
+    padding: 7px 10px 6px;
+    page-break-inside: avoid;
+  }
+  .card strong { display: block; margin-bottom: 2px; }
+  .card span { color: #374151; }
+  .note {
+    margin-top: 10px;
+    border-left: 3px solid #0C7F7B;
+    background: #F3F4F6;
+    padding: 8px 12px;
+    page-break-inside: avoid;
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="mark"><img src="../Assets/logo.png" alt="LYazılım"/></div>
+  <div>
+    <h1>Ortak Alan</h1>
+    <div class="brand">LYazılım</div>
+  </div>
+</header>
+
+<p class="lead">Ortak Alan, Windows bilgisayarların birbirine klasör, yazıcı, mesaj ve dosya ulaştırması için yapılır. Aynı ağdaki ya da Tailscale ile birbirini gören bilgisayarlar listede belirir. Her bilgisayar kendi adıyla görünür.</p>
+
+<h2>Amaç</h2>
+<p>Program, yan yana ya da uzakta duran bilgisayarları tek pencereden birbirine bağlar. Bir klasörü açmak, bir yazıcıyı kullanmak ya da kısa bir mesaj ile dosya göndermek için ayrı araçlar kurmaya gerek kalmaz. İlk bağlantıda karşı bilgisayar bir kez izin verir. İzin verilen bilgisayar bir daha sormaz.</p>
+
+<h2>Ne yapabilir</h2>
+<div class="grid">
+  <div class="card"><strong>Sohbet</strong><span>Seçilen kişiye mesaj, dosya ve ekran görüntüsü gider. Karşı taraf kapalıysa yazılan, açılınca iletilir.</span></div>
+  <div class="card"><strong>Ortak konuşma</strong><span>Ağdaki herkes aynı yere yazar ve gönderilen dosyayı görür. Dosyaya tıklanınca alınır.</span></div>
+  <div class="card"><strong>Klasör</strong><span>Seçilen klasör paylaşılır. Karşı taraf içinde gezinebilir, kopyalayabilir ve dosya bırakabilir.</span></div>
+  <div class="card"><strong>Yazıcı</strong><span>Bu bilgisayarın yazıcısı paylaşılır. Karşı taraf onu kendi yazıcılarına ekler ve oradan çıktı alır.</span></div>
+  <div class="card"><strong>Mesaj araçları</strong><span>Bağlantı tıklanınca açılır. Metin seçilip kopyalanır. Yıldızlı mesajlar süzülür. Sık yazılan cümle tek tıkla gönderilir.</span></div>
+  <div class="card"><strong>Görünüm</strong><span>Beş aydınlık ve beş karanlık hazır temadan biri seçilir. Yazı rengi temanın içindedir. Program Windows ile birlikte açılabilir.</span></div>
+</div>
+
+<h2>Nasıl kullanılır</h2>
+
+<h3>İlk açılış</h3>
+<ol>
+  <li>Programı açın. Ağda görünecek adı yazıp Devam deyin. Diğer bilgisayarlar sizi bu adla görür.</li>
+  <li>Masaüstüne Ortak Alan kısayolu gelir. Paylaşılan Dosyalar klasörü de masaüstünde durur.</li>
+  <li>Program, görev çubuğunun sağındaki simgede kalır. Simgeye tıklamak sohbeti açar. Sağ tık menüsünde Sohbet, Paylaşımlar, Paylaşılan Dosyalar, Ayarlar ve Çıkış vardır.</li>
+  <li>Pencereyi kapatmak programı durdurmaz. Tamamen kapatmak için simgeden Çıkış seçilir.</li>
+</ol>
+
+<h3>Kişiler</h3>
+<p>Solda Ortak konuşma ve kişi listesi durur. Çevrimiçi kişi renkli görünür. Tailscale üzerinden gelenin yanında bunu belirten bir yazı vardır. Çevrimdışı kişiye yazılan mesaj, o bilgisayar programı açınca gider.</p>
+<p>Bir kişiye ilk kez yazarken karşı ekranda İzin ver ve Reddet sorulur. Bu soru o bilgisayar için bir kez çıkar. Kişiye sağ tıklayınca paylaşılan klasörüne ya da yazıcısına bağlanılır. Listeden kaldır, kişiyi bu bilgisayarın listesinden gizler.</p>
+
+<h3>Mesaj göndermek</h3>
+<p>Soldan Ortak konuşmayı ya da bir kişiyi seçin. Alta yazıp Gönder’e basın. Enter da gönderir. Dosya düğmesi dosya seçtirir. Dosyayı ya da klasörü pencereye sürükleyip bırakmak da gönderir. Klasörün içindeki dosyalar teker teker gider. Bir dosya en çok 150 MB olabilir.</p>
+<p>Ekran düğmesi ekrandan bir dikdörtgen seçtirir. Kalem, fosforlu kalem ve silgi ile üzerine çizilir. Sohbete gönder ya da yalnızca kaydet seçilir.</p>
+<p>Gelen dosya bir kart olarak durur. Karta tıklanınca dosya alınır ve açılır. Alınan dosya masaüstündeki Paylaşılan Dosyalar klasörüne konur.</p>
+
+<h3>Bağlantı ve kopyalama</h3>
+<p>http, https ya da www ile başlayan adresin altı çizilir. Üzerine gelince imleç el olur. Tıklamak adresi tarayıcıda açar. Metin fareyle sürüklenerek seçilir. Ctrl+C seçilen parçayı, seçim yoksa mesajın tamamını kopyalar. Sağ tık menüsünde Seçileni kopyala ve Mesajı kopyala da vardır.</p>
+
+<h3>Favoriler</h3>
+<p>Mesajın yanındaki yıldız, o mesajı favoriye alır. Üstteki Favoriler düğmesi yalnızca bu konuşmada yıldızlanan mesajları gösterir. Aynı düğmeye tekrar basınca konuşmanın tamamı geri gelir. Yıldız her konuşmada ayrı durur.</p>
+
+<h3>Sabit mesajlar</h3>
+<p>Sık kullanılan cümleler bir kez kaydedilir. Sabit mesajlar düğmesi listeyi açar. Bir satıra tıklamak o cümleyi açık olan konuşmaya gönderir. Yeni cümle kutuya yazılıp Kaydet ile eklenir. Gönderilmiş bir mesaj, sağ tık menüsündeki Sabit mesajlara ekle ile de listeye alınır. Çıkar, cümleyi yalnızca listeden siler. Liste bütün konuşmalarda ortaktır.</p>
+
+<h3>Mesaj silmek</h3>
+<p>Konuşmanın tamamını silen bir komut yoktur. Yalnızca tek mesaj silinir. Mesajın üzerine sağ tıklayıp Sil derseniz o mesaj sizin ekranınızdan kalkar. Karşı tarafta metin durur ve silindiği anlaşılsın diye üzeri çizili görünür. Henüz karşıya gitmemiş bir mesaj silinirse oraya hiç ulaşmaz. Çizginin görünmesi için iki bilgisayarda da güncel programın açık olması gerekir.</p>
+
+<h3>Klasör paylaşmak</h3>
+<p>Üstteki Klasör paylaş ile bir klasör seçilir. Klasör, Paylaşımlar penceresinde listelenir. Karşı taraf kişiye sağ tıklayıp paylaşılan klasöre bağlanır ya da Paylaşılan Dosyalar penceresinden o bilgisayarı açar. Bu pencerede dosya açılır, kopyalanır, yapıştırılır, adı değiştirilir ve silinir. Yeni klasör de oluşturulabilir. Masaüstündeki Paylaşılan Dosyalar klasörü aynı yere açılır.</p>
+
+<h3>Yazıcı paylaşmak</h3>
+<p>Yazıcı paylaş, bu bilgisayardaki yazıcılardan birini seçtirir. Karşı taraf kişiye sağ tıklayıp paylaşılan yazıcıya bağlanır. Yazıcı, Windows’un yazıcı listesine eklenir. Oradan alınan çıktı, paylaşan bilgisayarın yazıcısına gider.</p>
+
+<h3>Aramak</h3>
+<p>Kişiler kutusuna yazılan ad, listeyi süzer. Konuşmada ara kutusu açık sohbette mesaj metnine, kişi adına ve dosya adına bakar.</p>
+
+<h3>Ayarlar ve güncelleme</h3>
+<p>Ayarlardan bilgisayar adı, Windows ile açılma ve hazır temalardan biri değişir. Beş aydınlık ve beş karanlık tema vardır; yazı rengi temayla birlikte gelir. Sağ üstteki işaret künyeyi açar. Künyede sürüm görünür ve güncelleme kurulur. Yeni sürüm varken penceredeki sarı ünlem de kurulumu başlatır.</p>
+
+<h3>Lisans</h3>
+<p>Program 30 günlük deneme ile açılır. Süre dolunca lisans önerilir; program çalışmayı sürdürür. Lisanssız en çok beş kullanıcı eklenir. Altıncı kullanıcı için lisans gerekir. Anahtar künyedeki kutuya yapıştırılıp kaydedilir. Anahtar bir bilgisayarda girilince aynı ağdaki diğer bilgisayarlar programı yeniden açtığında lisanslı olur. Program klasörü başka bilgisayara kopyalanırsa orada açılmaz.</p>
+
+<div class="note">
+  <strong>Birlikte çalışması için</strong>
+  <p>İki bilgisayarda da program açık olmalıdır. Bilgisayarlar aynı yerel ağda olmalı ya da Tailscale ile birbirini görmelidir. İlk bağlantı, karşı tarafın iznine bağlıdır.</p>
+  <p style="margin:0">İletişim: LvntYxl@gmail.com. Bu yazılım klasör, yazıcı ve mesaj paylaşımı için üretilmiştir. Kopyalanması ve satılması yasaktır.</p>
+</div>
+</body>
+</html>

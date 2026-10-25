@@ -49,12 +49,29 @@ public partial class App : Application
         ThemeService.Register();
         Store = new SettingsService(dataDir);
         Store.Load();
-        if (Settings.Theme is "Lacivert" or "Mavi" or "Grafit")
+        if (!MachineGuard.Bind(dataDir, Environment.ProcessPath, Store))
         {
-            Settings.Theme = "Tiffany";
+            MessageBox.Show(
+                "Bu program başka bir bilgisayardan kopyalanmış. Bu bilgisayarda çalışmaz.",
+                "Ortak Alan",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            Shutdown();
+            return;
+        }
+        var theme = ThemeService.Canonical(Settings.Theme, Settings.Appearance);
+        var appearance = ThemeService.Find(theme).Dark ? "Karanlık" : "Aydınlık";
+        if (theme != Settings.Theme || appearance != Settings.Appearance || Settings.TextColor != "Otomatik")
+        {
+            Settings.Theme = theme;
+            Settings.Appearance = appearance;
+            Settings.TextColor = "Otomatik";
             Store.Save();
         }
-        ThemeService.ApplySaved(Settings.Theme, Settings.Appearance, Settings.TextColor);
+        ThemeService.Apply(Settings.Theme);
+        LicenseService.Start(Store);
+        LicenseService.SeatNeeded += () => Dispatcher.BeginInvoke(Views.LicenseWindow.ShowSeat);
+        LicenseService.Adopted += () => _node?.Announce();
         ForgetWindowsErrors();
         BrandAssets.Init();
 
@@ -133,10 +150,12 @@ public partial class App : Application
         _node.Delivered += (peer, id) => Dispatcher.BeginInvoke(() => NoteDelivery(peer, id, null));
         _node.SendFailed += (peer, id, error) => Dispatcher.BeginInvoke(() => NoteDelivery(peer, id, error));
         _node.MessageSeen += (chat, ids) => Dispatcher.BeginInvoke(() => NoteSeen(chat, ids));
+        _node.MessageStruck += (chat, id) => Dispatcher.BeginInvoke(() => Chats.Strike(chat, id));
         _node.PrintReceived += OnPrint;
         _node.RoomReceived += OnRoom;
         _node.RoomFileSaved += OnRoomFile;
         _node.RoomHistory = () => Chats.Posts(RoomChat.Id);
+        _node.RoomStrikes = () => Chats.StrikeIds(RoomChat.Id);
         _node.RoomFilePath = id => Chats.Find(RoomChat.Id, id)?.FilePath;
         _node.SeedRoom(Chats.Posts(RoomChat.Id).Select(post => post.Id));
         _node.Start();
@@ -162,6 +181,8 @@ public partial class App : Application
             ListenForCommands();
         }
         _ = UpdateService.LookAsync();
+        if (LicenseService.ShouldRemind())
+            Views.LicenseWindow.ShowTrial();
         if (HasFlag(e.Args, "--paylasilan"))
             ShowFiles();
         if (TryKlasor(e.Args, out var openPeer, out var openShare))
@@ -372,6 +393,11 @@ public partial class App : Application
         if (Interlocked.CompareExchange(ref _restoreGate, 1, 0) != 0) return;
         try
         {
+            if (!Store.Allows(id))
+            {
+                LicenseService.NotifySeat();
+                return;
+            }
             var label = name.Length == 0 ? "Bu bilgisayar" : name;
             var owner = _chat is { IsVisible: true } ? _chat : null;
             var yes = MessageBox.Show(
@@ -381,7 +407,11 @@ public partial class App : Application
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question) == MessageBoxResult.Yes;
             if (!yes) return;
-            Store.RestorePerson(id, label);
+            if (!Store.RestorePerson(id, label))
+            {
+                LicenseService.NotifySeat();
+                return;
+            }
             Directory.Unhide(id);
             Directory.Remember(id, label);
             ShowChat(id);
@@ -436,7 +466,8 @@ public partial class App : Application
             Text = post.Text,
             FileName = post.FileName,
             Status = string.IsNullOrEmpty(post.FileName) ? "" : "Almak için tıklayın",
-            Utc = when
+            Utc = when,
+            Struck = post.Struck
         };
         if (!Chats.Add(RoomChat.Id, line)) return;
         if (!mine)

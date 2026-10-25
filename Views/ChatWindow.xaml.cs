@@ -16,9 +16,11 @@ public partial class ChatWindow : ChromeWindow
 {
     ObservableCollection<ChatLine>? _lines;
     ListCollectionView? _messageView;
+    readonly ObservableCollection<string> _quick = new();
     readonly ListCollectionView _people;
     bool _busy;
     bool _holdSelection;
+    bool _favoritesOnly;
     Storyboard? _blink;
     public string? SelectedId { get; private set; }
 
@@ -42,6 +44,7 @@ public partial class ChatWindow : ChromeWindow
         _people.LiveSortingProperties.Add(nameof(PeerVm.Name));
         _people.IsLiveSorting = true;
         PeerList.ItemsSource = _people;
+        QuickList.ItemsSource = _quick;
         Title = "Ortak Alan — " + App.Me.Settings.ComputerName;
         App.Me.Directory.Changed += RefreshPeers;
         RefreshPeers();
@@ -71,6 +74,12 @@ public partial class ChatWindow : ChromeWindow
         Input.IsEnabled = false;
         SendButton.IsEnabled = false;
         FileButton.IsEnabled = false;
+        FavoritesButton.IsEnabled = false;
+        QuickButton.IsEnabled = false;
+        _favoritesOnly = false;
+        PaintFavorites();
+        QuickPanel.Visibility = Visibility.Collapsed;
+        PaintQuick();
         MarkRoom(false);
         UpdateChatEmpty();
         StatusText.Text = "";
@@ -126,6 +135,7 @@ public partial class ChatWindow : ChromeWindow
     bool FilterLine(object item)
     {
         if (item is not ChatLine line) return false;
+        if (_favoritesOnly && !line.Favorite) return false;
         var query = ChatSearch.Text.Trim();
         if (query.Length == 0) return true;
         return line.Text.Contains(query, StringComparison.CurrentCultureIgnoreCase)
@@ -142,9 +152,139 @@ public partial class ChatWindow : ChromeWindow
             return;
         }
         var any = _messageView?.Cast<object>().Any() ?? false;
+        if (any)
+        {
+            EmptyChat.Visibility = Visibility.Collapsed;
+            return;
+        }
         var query = ChatSearch.Text.Trim();
-        EmptyChat.Text = "Eşleşen mesaj yok.";
-        EmptyChat.Visibility = !any && query.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (_favoritesOnly && query.Length == 0) EmptyChat.Text = "Favori mesaj yok.";
+        else if (_favoritesOnly) EmptyChat.Text = "Eşleşen favori yok.";
+        else if (query.Length > 0) EmptyChat.Text = "Eşleşen mesaj yok.";
+        else
+        {
+            EmptyChat.Visibility = Visibility.Collapsed;
+            return;
+        }
+        EmptyChat.Visibility = Visibility.Visible;
+    }
+
+    void Favorites_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedId == null) return;
+        _favoritesOnly = !_favoritesOnly;
+        PaintFavorites();
+        _messageView?.Refresh();
+        UpdateChatEmpty();
+    }
+
+    void PaintFavorites()
+    {
+        FavoritesButton.ToolTip = _favoritesOnly ? "Tüm mesajları göster" : "Sadece favori mesajları göster";
+        if (_favoritesOnly)
+        {
+            FavoritesButton.SetResourceReference(BackgroundProperty, "Accent");
+            FavoritesButton.SetResourceReference(BorderBrushProperty, "Accent");
+            FavoritesButton.SetResourceReference(ForegroundProperty, "OnAccent");
+            return;
+        }
+        FavoritesButton.ClearValue(BackgroundProperty);
+        FavoritesButton.ClearValue(BorderBrushProperty);
+        FavoritesButton.ClearValue(ForegroundProperty);
+    }
+
+    void Favorite_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedId == null || LineOf(sender) is not ChatLine line) return;
+        line.Favorite = !line.Favorite;
+        App.Me.Chats.Save(SelectedId);
+        if (_favoritesOnly)
+        {
+            _messageView?.Refresh();
+            UpdateChatEmpty();
+        }
+    }
+
+    void Quick_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedId == null) return;
+        var open = QuickPanel.Visibility != Visibility.Visible;
+        QuickPanel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        if (open) LoadQuick();
+        PaintQuick();
+    }
+
+    void PaintQuick()
+    {
+        if (QuickPanel.Visibility == Visibility.Visible)
+        {
+            QuickButton.SetResourceReference(BackgroundProperty, "Accent");
+            QuickButton.SetResourceReference(BorderBrushProperty, "Accent");
+            QuickButton.SetResourceReference(ForegroundProperty, "OnAccent");
+            return;
+        }
+        QuickButton.ClearValue(BackgroundProperty);
+        QuickButton.ClearValue(BorderBrushProperty);
+        QuickButton.ClearValue(ForegroundProperty);
+    }
+
+    void LoadQuick()
+    {
+        _quick.Clear();
+        foreach (var text in App.Me.Store.CopyQuick())
+            _quick.Add(text);
+        QuickEmpty.Visibility = _quick.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void QuickInput_TextChanged(object sender, TextChangedEventArgs e) =>
+        QuickHint.Visibility = QuickInput.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    void QuickInput_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        SaveQuick();
+    }
+
+    void QuickSave_Click(object sender, RoutedEventArgs e) => SaveQuick();
+
+    void SaveQuick()
+    {
+        var text = QuickInput.Text.Trim();
+        if (text.Length == 0)
+        {
+            Note("Önce sabit mesaj yazın.");
+            return;
+        }
+        if (!App.Me.Store.AddQuick(text))
+        {
+            Note("Bu metin zaten sabit mesajlarda.");
+            return;
+        }
+        QuickInput.Clear();
+        LoadQuick();
+        Note("Sabit mesaj kaydedildi.");
+    }
+
+    async void QuickSend_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: string text }) return;
+        await SendText(text);
+    }
+
+    void QuickRemove_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: string text }) return;
+        App.Me.Store.RemoveQuick(text);
+        LoadQuick();
+    }
+
+    void LeaveFavorites()
+    {
+        if (!_favoritesOnly) return;
+        _favoritesOnly = false;
+        PaintFavorites();
+        _messageView?.Refresh();
     }
 
     void Room_Click(object sender, MouseButtonEventArgs e)
@@ -171,6 +311,12 @@ public partial class ChatWindow : ChromeWindow
         if (_holdSelection || PeerList.SelectedItem is not PeerVm peer) return;
         MarkRoom(false);
         Bind(peer.Id, peer.Name);
+        if (!App.Me.Store.Allows(peer.Id))
+        {
+            StatusText.Text = LicenseService.SeatStatus;
+            LicenseService.NotifySeat();
+            return;
+        }
         await RequestApproval(peer);
     }
 
@@ -282,6 +428,8 @@ public partial class ChatWindow : ChromeWindow
         if (_lines != null) _lines.CollectionChanged -= LinesChanged;
         SelectedId = id;
         PeerTitle.Text = name;
+        _favoritesOnly = false;
+        PaintFavorites();
         _lines = App.Me.Chats.Get(id);
         _lines.CollectionChanged += LinesChanged;
         _messageView = new ListCollectionView(_lines);
@@ -290,6 +438,8 @@ public partial class ChatWindow : ChromeWindow
         Input.IsEnabled = true;
         SendButton.IsEnabled = true;
         FileButton.IsEnabled = true;
+        FavoritesButton.IsEnabled = true;
+        QuickButton.IsEnabled = true;
         if (id == RoomChat.Id)
             StatusText.Text = "Buraya yazılanı ağdaki herkes görür. Dosyaya tıklayınca alınır.";
         else
@@ -346,28 +496,77 @@ public partial class ChatWindow : ChromeWindow
 
     void Transcript_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (SelectedId == null || _lines == null || SelectedId == RoomChat.Id) return;
+        if (SelectedId == null || _lines == null) return;
         var peerId = SelectedId;
         var line = LineOf(e.OriginalSource);
+        if (line == null) return;
         var menu = new ContextMenu { Placement = PlacementMode.MousePoint };
-        if (line != null)
+        if (line.Text.Length > 0)
         {
-            var one = new MenuItem { Header = "Bu mesajı sil" };
-            one.Click += (_, _) => App.Me.Chats.Remove(peerId, line);
-            menu.Items.Add(one);
+            var selected = e.OriginalSource is DependencyObject source ? MessageOf(source)?.SelectedPlain() ?? "" : "";
+            var whole = line.Text;
+            if (selected.Length > 0 && !string.Equals(selected, whole, StringComparison.Ordinal))
+            {
+                var part = new MenuItem { Header = "Seçileni kopyala", InputGestureText = "Ctrl+C" };
+                var copy = selected;
+                part.Click += (_, _) => MessageText.CopyToClipboard(copy, this);
+                menu.Items.Add(part);
+                var allText = new MenuItem { Header = "Mesajı kopyala" };
+                allText.Click += (_, _) => MessageText.CopyToClipboard(whole, this);
+                menu.Items.Add(allText);
+            }
+            else
+            {
+                var allText = new MenuItem { Header = "Mesajı kopyala", InputGestureText = "Ctrl+C" };
+                var copy = selected.Length > 0 ? selected : whole;
+                allText.Click += (_, _) => MessageText.CopyToClipboard(copy, this);
+                menu.Items.Add(allText);
+            }
         }
-        var all = new MenuItem { Header = "Tümünü sil", IsEnabled = _lines.Count > 0 };
-        all.Click += (_, _) =>
+
+        if (menu.Items.Count > 0) menu.Items.Add(new Separator());
+        if (!line.IsFile && line.Text.Length > 0)
         {
-            if (_lines.Count == 0) return;
-            if (MessageBox.Show(this, "Bu konuşmadaki tüm mesajlar silinsin mi?", "Sohbet", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
-                return;
-            App.Me.Chats.Clear(peerId);
-        };
-        menu.Items.Add(all);
+            var keep = new MenuItem { Header = "Sabit mesajlara ekle" };
+            var saved = line.Text;
+            keep.Click += (_, _) =>
+            {
+                if (!App.Me.Store.AddQuick(saved))
+                {
+                    Note("Bu metin zaten sabit mesajlarda.");
+                    return;
+                }
+                if (QuickPanel.Visibility == Visibility.Visible) LoadQuick();
+                Note("Sabit mesajlara eklendi.");
+            };
+            menu.Items.Add(keep);
+        }
+        var one = new MenuItem { Header = "Sil" };
+        one.Click += async (_, _) => await ForgetLine(peerId, line);
+        menu.Items.Add(one);
         menu.IsOpen = true;
         e.Handled = true;
     }
+
+    async Task ForgetLine(string chatId, ChatLine line)
+    {
+        var id = line.Id;
+        var unsent = chatId != RoomChat.Id && App.Me.Node.CancelPending(chatId, id);
+        App.Me.Chats.Remove(chatId, line);
+        UpdateChatEmpty();
+        if (unsent || id.Length == 0) return;
+        try
+        {
+            if (chatId == RoomChat.Id) await App.Me.Node.BroadcastDropAsync(id);
+            else await App.Me.Node.SendDropAsync(chatId, id);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+        }
+    }
+
+    internal void Note(string text) => StatusText.Text = text;
 
     void ScrollEnd() =>
         Dispatcher.BeginInvoke(() => Transcript.ScrollToEnd(), System.Windows.Threading.DispatcherPriority.Background);
@@ -384,13 +583,25 @@ public partial class ChatWindow : ChromeWindow
     void Input_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) =>
         Placeholder.Visibility = Input.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-    async Task SendText()
+    async Task SendText(string? preset = null)
     {
-        if (_busy || SelectedId == null) return;
-        var text = Input.Text.Trim();
+        if (SelectedId == null) return;
+        if (_busy)
+        {
+            if (preset != null) Note("Gönderim bitince yeniden deneyin.");
+            return;
+        }
+        var text = (preset ?? Input.Text).Trim();
         if (text.Length == 0) return;
+        if (SelectedId != RoomChat.Id && !App.Me.Store.Allows(SelectedId))
+        {
+            StatusText.Text = LicenseService.SeatStatus;
+            LicenseService.NotifySeat();
+            return;
+        }
         _busy = true;
-        Input.Clear();
+        if (preset == null) Input.Clear();
+        LeaveFavorites();
         var line = new ChatLine
         {
             Id = Guid.NewGuid().ToString("N"),
@@ -592,7 +803,14 @@ public partial class ChatWindow : ChromeWindow
         }
         if (peerId != SelectedId)
             Bind(peerId, App.Me.Directory.Peers.FirstOrDefault(p => p.Id == peerId)?.Name ?? "Sohbet");
+        if (peerId != RoomChat.Id && !App.Me.Store.Allows(peerId))
+        {
+            StatusText.Text = LicenseService.SeatStatus;
+            LicenseService.NotifySeat();
+            return;
+        }
         if (_busy) return;
+        LeaveFavorites();
         _busy = true;
         var sent = 0;
         var waiting = false;
@@ -705,9 +923,31 @@ public partial class ChatWindow : ChromeWindow
         {
             if (current is FrameworkElement element && element.DataContext is ChatLine line)
                 return line;
-            current = VisualTreeHelper.GetParent(current);
+            if (current is FrameworkContentElement content && content.DataContext is ChatLine inline)
+                return inline;
+            current = NextParent(current);
         }
         return null;
+    }
+
+    static MessageText? MessageOf(DependencyObject source)
+    {
+        var current = (DependencyObject?)source;
+        while (current != null)
+        {
+            if (current is MessageText text) return text;
+            current = NextParent(current);
+        }
+        return null;
+    }
+
+    static DependencyObject? NextParent(DependencyObject item)
+    {
+        if (item is Visual)
+            return VisualTreeHelper.GetParent(item);
+        if (item is FrameworkContentElement content)
+            return content.Parent;
+        return LogicalTreeHelper.GetParent(item);
     }
 
     protected override void OnClosing(CancelEventArgs e)

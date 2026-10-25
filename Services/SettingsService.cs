@@ -44,10 +44,11 @@ public sealed class SettingsService
                 model.Hidden ??= new();
                 model.Shares ??= new();
                 model.FolderColors ??= new();
+                model.QuickMessages ??= new();
                 if (string.IsNullOrWhiteSpace(model.ComputerId))
                     model.ComputerId = Guid.NewGuid().ToString("N");
                 if (string.IsNullOrWhiteSpace(model.Theme))
-                    model.Theme = "Tiffany";
+                    model.Theme = "Kağıt";
                 if (model.Appearance != "Karanlık")
                     model.Appearance = "Aydınlık";
                 if (string.IsNullOrWhiteSpace(model.TextColor))
@@ -109,32 +110,49 @@ public sealed class SettingsService
         }
     }
 
-    public void RestorePerson(string id, string name)
+    public bool Allows(string id)
     {
-        if (id.Length == 0) return;
-        lock (_gate)
-            Current.Hidden.RemoveAll(p => p.Id == id);
-        RememberPerson(id, name);
+        if (id.Length == 0) return false;
+        lock (_gate) return LicenseService.Fits(Current, id);
     }
 
-    public void RememberPerson(string id, string name)
+    public int UserCount()
     {
-        if (id.Length == 0 || id == Current.ComputerId || IsHidden(id)) return;
+        lock (_gate) return LicenseService.Count(Current);
+    }
+
+    public bool RestorePerson(string id, string name)
+    {
+        if (id.Length == 0) return false;
+        lock (_gate)
+        {
+            if (!LicenseService.Fits(Current, id)) return false;
+            Current.Hidden.RemoveAll(p => p.Id == id);
+        }
+        RememberPerson(id, name);
+        return true;
+    }
+
+    public bool RememberPerson(string id, string name)
+    {
+        if (id.Length == 0 || id == Current.ComputerId || IsHidden(id)) return false;
         lock (_gate)
         {
             var found = Current.People.FirstOrDefault(p => p.Id == id);
             var label = name.Length == 0 ? "Bilgisayar" : name;
             if (found == null)
             {
+                if (!LicenseService.Fits(Current, id)) return false;
                 Current.People.Add(new KnownPeer { Id = id, Name = label });
                 SaveLocked();
-                return;
+                return true;
             }
             if (!string.Equals(found.Name, label, StringComparison.Ordinal))
             {
                 found.Name = label;
                 SaveLocked();
             }
+            return true;
         }
     }
 
@@ -162,6 +180,36 @@ public sealed class SettingsService
     public List<ShareItem> CopyShares()
     {
         lock (_gate) return Current.Shares.ToList();
+    }
+
+    public List<string> CopyQuick()
+    {
+        lock (_gate) return Current.QuickMessages.ToList();
+    }
+
+    public bool AddQuick(string text)
+    {
+        text = text.Trim();
+        if (text.Length == 0) return false;
+        lock (_gate)
+        {
+            if (Current.QuickMessages.Any(item => string.Equals(item, text, StringComparison.Ordinal)))
+                return false;
+            Current.QuickMessages.Insert(0, text);
+            while (Current.QuickMessages.Count > 40)
+                Current.QuickMessages.RemoveAt(Current.QuickMessages.Count - 1);
+            SaveLocked();
+            return true;
+        }
+    }
+
+    public void RemoveQuick(string text)
+    {
+        lock (_gate)
+        {
+            if (Current.QuickMessages.RemoveAll(item => item == text) == 0) return;
+            SaveLocked();
+        }
     }
 
     void SaveLocked()

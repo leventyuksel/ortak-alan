@@ -35,7 +35,14 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           body: |
-            Kurulum için OrtakAlan-Setup.exe dosyasını çalıştırın.
+            Ortak Alan, Windows bilgisayarların birbirine klasör, yazıcı, mesaj ve dosya ulaştırması için yapılır.
+
+            Kurulum için OrtakAlan-Setup.exe dosyasını çalıştırın. Kullanım Ortak Alan.pdf dosyasındadır.
+
+            Sürüm 2.0.1 lisanslı üründür. Program 30 günlük deneme ile açılır. Lisanssız en çok beş kullanıcı eklenir. Anahtar bir bilgisayarda girilince aynı ağdaki diğer bilgisayarlar programı yeniden açtığında lisanslı olur. Program klasörü başka bilgisayara kopyalanırsa orada açılmaz.
+
+            İletişim: LvntYxl@gmail.com
           files: |
             dist/OrtakAlan-Setup.exe
             OrtakAlan-win-x64.zip
+            docs/Ortak Alan.pdf

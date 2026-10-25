@@ -3,7 +3,7 @@
                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                xmlns:v="clr-namespace:OrtakAlan.Views"
                Title="Ayarlar"
-               Width="460"
+               Width="520"
                SizeToContent="Height"
                WindowStartupLocation="CenterScreen">
   <Border Padding="28,24,28,22" BorderBrush="{DynamicResource Line}" BorderThickness="1" Background="{DynamicResource Paper}">
@@ -26,61 +26,61 @@
 
       <TextBlock Text="Bilgisayar adı" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="0,22,0,6"/>
       <TextBox x:Name="NameBox"/>
-      <TextBlock x:Name="NameError" Foreground="{StaticResource Danger}" FontSize="12" Margin="0,6,0,0" Visibility="Collapsed"/>
+      <TextBlock x:Name="NameError" Foreground="{DynamicResource Danger}" FontSize="12" Margin="0,6,0,0" Visibility="Collapsed"/>
 
       <CheckBox x:Name="StartBox" Content="Windows ile başlasın" Foreground="{DynamicResource Ink}" Margin="0,16,0,0"/>
       <TextBlock Text="İşaretli değilse program yalnızca masaüstündeki kısayoldan açılır." Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="22,4,0,0"/>
 
       <TextBlock Text="Tema" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="0,18,0,8"/>
-      <UniformGrid Columns="2">
-        <Button x:Name="LightButton" Content="Aydınlık" Margin="0,0,4,0" Tag="Aydınlık" Click="Appearance_Click" Style="{StaticResource SecondaryButton}"/>
-        <Button x:Name="DarkButton" Content="Karanlık" Margin="4,0,0,0" Tag="Karanlık" Click="Appearance_Click" Style="{StaticResource SecondaryButton}"/>
-      </UniformGrid>
-      <ItemsControl x:Name="ThemeSwatches" Margin="0,10,0,0">
+      <TextBlock Text="Aydınlık" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,0,0,4"/>
+      <ItemsControl x:Name="LightThemes">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <UniformGrid Columns="6"/>
+            <UniformGrid Columns="5"/>
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Button Width="36" Height="36" Margin="3" Background="Transparent" BorderThickness="0" Click="Theme_Click" ToolTip="{Binding Name}">
+            <Button Margin="3" Height="62" Background="Transparent" BorderThickness="0" Click="Theme_Click">
               <Button.Template>
                 <ControlTemplate TargetType="Button">
-                  <Grid>
-                    <Ellipse Width="32" Height="32" Stroke="{DynamicResource Accent}" StrokeThickness="2" Visibility="{Binding Selected, Converter={StaticResource BoolVis}}"/>
-                    <Ellipse Width="24" Height="24" Fill="{Binding Color}"/>
-                  </Grid>
+                  <Border Background="{Binding Paper}" BorderBrush="{Binding EdgeBrush}" BorderThickness="2" CornerRadius="8" Padding="4,8,4,6">
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding Face}" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                      <Border Height="4" Margin="6,7,6,0" CornerRadius="2" Background="{Binding Accent}"/>
+                    </StackPanel>
+                  </Border>
                 </ControlTemplate>
               </Button.Template>
             </Button>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
-
-      <TextBlock Text="Yazı rengi" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="0,16,0,8"/>
-      <ItemsControl x:Name="TextSwatches">
+      <TextBlock Text="Karanlık" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,12,0,4"/>
+      <ItemsControl x:Name="DarkThemes">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <UniformGrid Columns="6"/>
+            <UniformGrid Columns="5"/>
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Button Width="36" Height="36" Margin="3" Background="Transparent" BorderThickness="0" Click="Text_Click" ToolTip="{Binding Name}">
+            <Button Margin="3" Height="62" Background="Transparent" BorderThickness="0" Click="Theme_Click">
               <Button.Template>
                 <ControlTemplate TargetType="Button">
-                  <Grid>
-                    <Ellipse Width="32" Height="32" Stroke="{DynamicResource Accent}" StrokeThickness="2" Visibility="{Binding Selected, Converter={StaticResource BoolVis}}"/>
-                    <Ellipse Width="24" Height="24" Fill="{Binding Color}"/>
-                  </Grid>
+                  <Border Background="{Binding Paper}" BorderBrush="{Binding EdgeBrush}" BorderThickness="2" CornerRadius="8" Padding="4,8,4,6">
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding Face}" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                      <Border Height="4" Margin="6,7,6,0" CornerRadius="2" Background="{Binding Accent}"/>
+                    </StackPanel>
+                  </Border>
                 </ControlTemplate>
               </Button.Template>
             </Button>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
-      <TextBlock x:Name="SampleText" Text="Örnek yazı" Margin="0,8,0,0" FontSize="14"/>
+      <TextBlock Text="Yazı rengi temayla birlikte gelir." Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,8,0,0"/>
 
       <Button Content="Kaydet" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right" Margin="0,18,0,0" MinWidth="108" Click="Save_Click"/>
     </StackPanel>

@@ -12,6 +12,34 @@
                AllowDrop="True"
                PreviewDrop="Window_Drop"
                PreviewDragOver="Window_DragOver">
+  <v:ChromeWindow.Resources>
+    <Style x:Key="StarButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="MinHeight" Value="28"/>
+      <Setter Property="MinWidth" Value="28"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="ToolTip" Value="{Binding FavoriteTip}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="4">
+              <TextBlock x:Name="glyph" Text="{Binding FavoriteGlyph}" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                         Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <DataTrigger Binding="{Binding Favorite}" Value="True">
+                <Setter TargetName="glyph" Property="Foreground" Value="#E0A100"/>
+              </DataTrigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Wash}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </v:ChromeWindow.Resources>
   <Border Background="{DynamicResource Paper}">
     <Grid>
       <Grid.RowDefinitions>
@@ -130,10 +158,15 @@
         <Grid Grid.Column="1" Background="{DynamicResource Paper}">
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
           </Grid.RowDefinitions>
-          <Grid Margin="16,8,16,8">
+          <Grid Margin="16,8,16,4">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*"/>
               <ColumnDefinition Width="220"/>
@@ -143,16 +176,74 @@
               <TextBox x:Name="ChatSearch" Padding="8,4" MinHeight="32" FontSize="13" TextChanged="ChatSearch_TextChanged"/>
               <TextBlock x:Name="ChatHint" Text="Konuşmada ara" Foreground="{DynamicResource Muted}" Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" FontSize="13"/>
             </Grid>
+            <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
+              <Button x:Name="FavoritesButton" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Padding="10,6" MinHeight="32" IsEnabled="False" Click="Favorites_Click" ToolTip="Sadece favori mesajları göster">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE734;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                  <TextBlock Text="Favoriler" VerticalAlignment="Center"/>
+                </StackPanel>
+              </Button>
+              <Button x:Name="QuickButton" Style="{StaticResource SecondaryButton}" Padding="10,6" MinHeight="32" IsEnabled="False" Click="Quick_Click" ToolTip="Kayıtlı mesajları aç">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                  <TextBlock Text="Sabit mesajlar" VerticalAlignment="Center"/>
+                </StackPanel>
+              </Button>
+            </WrapPanel>
           </Grid>
-          <Grid Grid.Row="1">
+          <Border x:Name="QuickPanel" Grid.Row="1" Visibility="Collapsed" Margin="16,0,16,8" Padding="8"
+                  Background="{DynamicResource Wash}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8">
+            <DockPanel>
+              <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid>
+                  <TextBox x:Name="QuickInput" Padding="8,4" MinHeight="32" FontSize="13" PreviewKeyDown="QuickInput_PreviewKeyDown" TextChanged="QuickInput_TextChanged"/>
+                  <TextBlock x:Name="QuickHint" Text="Sabit mesaj yazın" Foreground="{DynamicResource Muted}" Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" FontSize="13"/>
+                </Grid>
+                <Button Grid.Column="1" Content="Kaydet" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Padding="10,6" MinHeight="32" Click="QuickSave_Click"/>
+              </Grid>
+              <TextBlock x:Name="QuickEmpty" DockPanel.Dock="Top" Text="Henüz sabit mesaj yok. Yazıp Kaydet'e basın; listeden seçince gönderilir." Foreground="{DynamicResource Muted}" FontSize="12" Margin="2,0,0,6" TextWrapping="Wrap"/>
+              <ScrollViewer MaxHeight="168" VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="QuickList">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Grid Margin="0,2">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="*"/>
+                          <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Click="QuickSend_Click" HorizontalContentAlignment="Left" Style="{StaticResource RowButton}" Padding="8,6" ToolTip="Gönder">
+                          <TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="{DynamicResource Ink}"/>
+                        </Button>
+                        <Button Grid.Column="1" Content="Çıkar" Style="{StaticResource GhostButton}" Margin="4,0,0,0" Padding="8,4" MinHeight="28" Click="QuickRemove_Click" ToolTip="Listeden çıkar"/>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </DockPanel>
+          </Border>
+          <Grid Grid.Row="2">
           <TextBlock x:Name="EmptyChat" Text="Bir bilgisayar seçin." Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" Margin="24"/>
           <ScrollViewer x:Name="Transcript" VerticalScrollBarVisibility="Auto" Padding="14,0,14,8" Background="Transparent" PreviewMouseRightButtonDown="Transcript_PreviewMouseRightButtonDown">
             <ItemsControl x:Name="Messages">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <StackPanel Margin="0,4">
-                    <TextBlock Text="{Binding Author}" FontSize="11" Margin="4,0,0,1" Foreground="#5CEBFF"
+                    <TextBlock Text="{Binding Author}" FontSize="11" Margin="4,0,0,1" Foreground="{DynamicResource Accent}"
                                Visibility="{Binding ShowAuthor, Converter={StaticResource BoolVis}}"/>
+                    <Grid HorizontalAlignment="{Binding Mine, Converter={StaticResource MineAlign}}">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <Button Grid.Column="0" Style="{StaticResource StarButton}" Margin="0,0,2,0" Click="Favorite_Click"
+                              Visibility="{Binding Mine, Converter={StaticResource BoolVis}}"/>
+                      <StackPanel Grid.Column="1">
                     <Border MaxWidth="280" Padding="12,8" CornerRadius="12" Visibility="{Binding IsFile, Converter={StaticResource NotBoolVis}}">
                       <Border.Style>
                         <Style TargetType="Border">
@@ -166,18 +257,7 @@
                           </Style.Triggers>
                         </Style>
                       </Border.Style>
-                      <TextBlock Text="{Binding Text}" TextWrapping="Wrap">
-                        <TextBlock.Style>
-                          <Style TargetType="TextBlock">
-                            <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
-                            <Style.Triggers>
-                              <DataTrigger Binding="{Binding Mine}" Value="True">
-                                <Setter Property="Foreground" Value="{DynamicResource OnAccent}"/>
-                              </DataTrigger>
-                            </Style.Triggers>
-                          </Style>
-                        </TextBlock.Style>
-                      </TextBlock>
+                      <v:MessageText Body="{Binding Text}" Mine="{Binding Mine}" Struck="{Binding Struck}"/>
                     </Border>
                     <Button MaxWidth="280" Margin="0,2" Padding="0" Cursor="Hand" ToolTip="Dosyayı aç"
                             Visibility="{Binding IsFile, Converter={StaticResource BoolVis}}"
@@ -195,7 +275,17 @@
                               </Grid.ColumnDefinitions>
                               <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource Ink}"/>
                               <StackPanel Grid.Column="1">
-                                <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Ink}"/>
+                                <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Ink}">
+                                  <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                      <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Struck}" Value="True">
+                                          <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                        </DataTrigger>
+                                      </Style.Triggers>
+                                    </Style>
+                                  </TextBlock.Style>
+                                </TextBlock>
                                 <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Muted}"/>
                               </StackPanel>
                               <TextBlock Grid.Column="2" Text="{Binding Action}" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Accent}" FontSize="12"/>
@@ -209,13 +299,17 @@
                         </ControlTemplate>
                       </Button.Template>
                     </Button>
+                      </StackPanel>
+                      <Button Grid.Column="2" Style="{StaticResource StarButton}" Margin="2,0,0,0" Click="Favorite_Click"
+                              Visibility="{Binding Mine, Converter={StaticResource NotBoolVis}}"/>
+                    </Grid>
                     <TextBlock Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource Muted}" Margin="4,1,4,0"
                                Visibility="{Binding HasStatus, Converter={StaticResource BoolVis}}"
                                HorizontalAlignment="{Binding Mine, Converter={StaticResource MineAlign}}"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,1,2,0" ToolTip="{Binding TickText}"
                                 Visibility="{Binding ShowTicks, Converter={StaticResource BoolVis}}">
-                      <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#0ABAB5" VerticalAlignment="Center"/>
-                      <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#0ABAB5" Margin="-8,0,0,0" VerticalAlignment="Center"
+                      <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                      <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Accent}" Margin="-8,0,0,0" VerticalAlignment="Center"
                                  Visibility="{Binding Seen, Converter={StaticResource BoolVis}}"/>
                     </StackPanel>
                   </StackPanel>
@@ -224,7 +318,7 @@
             </ItemsControl>
           </ScrollViewer>
           </Grid>
-          <StackPanel Grid.Row="2" Margin="12,8,12,12">
+          <StackPanel Grid.Row="3" Margin="12,8,12,12">
         <Grid>
           <TextBox x:Name="Input" IsEnabled="False" PreviewKeyDown="Input_PreviewKeyDown" TextChanged="Input_TextChanged"/>
           <TextBlock x:Name="Placeholder" Text="Mesaj yazın" Foreground="{DynamicResource Muted}" Margin="12,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
@@ -235,7 +329,7 @@
             <Button x:Name="SendButton" Content="Gönder" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Padding="12,8" MinHeight="36" IsEnabled="False" Click="Send_Click"/>
         </WrapPanel>
         <ProgressBar x:Name="TransferBar" Height="4" Margin="0,8,0,0" Minimum="0" Maximum="100" Visibility="Collapsed"
-                     Foreground="#0ABAB5" Background="#330ABAB5" BorderThickness="0"/>
+                     Foreground="{DynamicResource Accent}" Background="{DynamicResource AccentSoft}" BorderThickness="0"/>
         <TextBlock x:Name="StatusText" Foreground="{DynamicResource Muted}" FontSize="12" Margin="2,8,0,0" TextWrapping="Wrap"/>
           </StackPanel>
         </Grid>

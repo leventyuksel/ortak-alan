@@ -7,6 +7,12 @@ static class ShareConnect
 {
     public static string OpenFolder(PeerVm peer, RemoteShareVm share, bool createShortcut)
     {
+        if (!App.Me.Store.Allows(peer.Id))
+        {
+            LicenseService.NotifySeat();
+            return LicenseService.SeatStatus;
+        }
+
         var label = "";
         if (createShortcut)
         {
@@ -22,6 +28,12 @@ static class ShareConnect
 
     public static async Task<string> ConnectPrinter(PeerVm peer, RemoteShareVm share, Window? owner)
     {
+        if (!App.Me.Store.Allows(peer.Id))
+        {
+            LicenseService.NotifySeat();
+            return LicenseService.SeatStatus;
+        }
+
         var result = await LocalPrinters.EnsureAsync(peer.Id, peer.Name, share.Id, share.Name, peer.Online);
         if (result.Ok)
         {

@@ -3,7 +3,7 @@
                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                xmlns:v="clr-namespace:OrtakAlan.Views"
                Title="Künye"
-               Width="400"
+               Width="440"
                SizeToContent="Height"
                WindowStartupLocation="CenterScreen"
                Topmost="True"
@@ -36,7 +36,13 @@
       <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,18,0,0" Foreground="{DynamicResource Ink}"
                  Text="Bu yazılım bilgisayarlar arasında klasör, yazıcı ve mesaj paylaşımı için üretilmiştir. Kopyalanması ve satılması yasaktır. Tüm hakları saklıdır."/>
 
-      <Button Margin="0,16,0,0" Click="Phone_Click" HorizontalContentAlignment="Stretch" Cursor="Hand">
+      <TextBlock x:Name="LicenseState" Margin="0,14,0,0" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" TextWrapping="Wrap"/>
+      <TextBlock x:Name="UserState" Margin="0,2,0,0" Foreground="{DynamicResource Muted}" FontSize="12"/>
+      <TextBox x:Name="LicenseBox" Margin="0,10,0,0" MinHeight="52" MaxHeight="88" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" ToolTip="Lisans anahtarı"/>
+      <Button Content="Lisansı kaydet" Style="{StaticResource SecondaryButton}" Margin="0,8,0,0" HorizontalAlignment="Stretch" Click="SaveLicense_Click"/>
+      <TextBlock x:Name="LicenseError" Margin="0,6,0,0" FontSize="12" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Visibility="Collapsed"/>
+
+      <Button Margin="0,16,0,0" Click="Mail_Click" HorizontalContentAlignment="Stretch" Cursor="Hand">
         <Button.Template>
           <ControlTemplate TargetType="Button">
             <Border x:Name="card" Background="{DynamicResource Wash}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="10" Padding="12,10">
@@ -46,11 +52,11 @@
                   <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Border Width="32" Height="32" CornerRadius="8" Background="White">
-                  <TextBlock Text="&#xE717;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  <TextBlock Text="&#xE715;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                  <TextBlock Text="Kurulum ve destek" Foreground="{DynamicResource Muted}" FontSize="12"/>
-                  <TextBlock Text="0555 257 80 72" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="0,1,0,0"/>
+                  <TextBlock Text="İletişim" Foreground="{DynamicResource Muted}" FontSize="12"/>
+                  <TextBlock Text="LvntYxl@gmail.com" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="0,1,0,0"/>
                 </StackPanel>
               </Grid>
             </Border>

@@ -3,10 +3,10 @@
                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                xmlns:v="clr-namespace:OrtakAlan.Views"
                Title="Görünüm"
-               Width="480"
+               Width="520"
                SizeToContent="Height"
                WindowStartupLocation="CenterScreen">
-  <Border Padding="28,24,28,22" BorderBrush="{StaticResource Line}" BorderThickness="1">
+  <Border Padding="28,24,28,22" BorderBrush="{DynamicResource Line}" BorderThickness="1" Background="{DynamicResource Paper}">
     <StackPanel>
       <Grid MouseLeftButtonDown="Header_MouseLeftButtonDown">
         <Grid.ColumnDefinitions>
@@ -18,48 +18,61 @@
           <Image x:Name="LogoImage" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
         <StackPanel Grid.Column="1" Margin="12,0,0,0">
-          <TextBlock Text="Ortak Alan" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock Text="Görünüm" Foreground="{StaticResource Muted}" FontSize="13"/>
+          <TextBlock Text="Ortak Alan" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
+          <TextBlock Text="Görünüm" Foreground="{DynamicResource Muted}" FontSize="13"/>
         </StackPanel>
         <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE8BB;" Click="Close_Click"/>
       </Grid>
 
-      <TextBlock Text="Tema rengi" FontWeight="SemiBold" Margin="0,22,0,8"/>
-      <ItemsControl x:Name="Swatches">
+      <TextBlock Text="Aydınlık" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,22,0,4"/>
+      <ItemsControl x:Name="LightThemes">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <UniformGrid Columns="6"/>
+            <UniformGrid Columns="5"/>
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <StackPanel Margin="2,4">
-              <Button Click="Swatch_Click" Width="46" Height="46" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center">
-                <Button.Template>
-                  <ControlTemplate TargetType="Button">
-                    <Grid>
-                      <Ellipse Width="42" Height="42" Stroke="{DynamicResource Accent}" StrokeThickness="2" Visibility="{Binding Selected, Converter={StaticResource BoolVis}}"/>
-                      <Ellipse Width="30" Height="30" Fill="{Binding Color}"/>
-                      <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" Foreground="{Binding Mark}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Selected, Converter={StaticResource BoolVis}}"/>
-                    </Grid>
-                  </ControlTemplate>
-                </Button.Template>
-              </Button>
-              <TextBlock Text="{Binding Name}" FontSize="12" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
-            </StackPanel>
+            <Button Margin="3" Height="62" Background="Transparent" BorderThickness="0" Click="Theme_Click">
+              <Button.Template>
+                <ControlTemplate TargetType="Button">
+                  <Border Background="{Binding Paper}" BorderBrush="{Binding EdgeBrush}" BorderThickness="2" CornerRadius="8" Padding="4,8,4,6">
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding Face}" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                      <Border Height="4" Margin="6,7,6,0" CornerRadius="2" Background="{Binding Accent}"/>
+                    </StackPanel>
+                  </Border>
+                </ControlTemplate>
+              </Button.Template>
+            </Button>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
-
-      <TextBlock Text="Önizleme" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,16,0,8"/>
-      <Border BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="16" MinHeight="96">
-        <StackPanel>
-          <Border Background="{DynamicResource Accent}" CornerRadius="10" Padding="12,8" HorizontalAlignment="Right">
-            <TextBlock Text="Aldım." Foreground="{DynamicResource OnAccent}"/>
-          </Border>
-          <Button Content="Gönder" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right" Margin="0,12,0,0" IsHitTestVisible="False"/>
-        </StackPanel>
-      </Border>
+      <TextBlock Text="Karanlık" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,12,0,4"/>
+      <ItemsControl x:Name="DarkThemes">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <UniformGrid Columns="5"/>
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Button Margin="3" Height="62" Background="Transparent" BorderThickness="0" Click="Theme_Click">
+              <Button.Template>
+                <ControlTemplate TargetType="Button">
+                  <Border Background="{Binding Paper}" BorderBrush="{Binding EdgeBrush}" BorderThickness="2" CornerRadius="8" Padding="4,8,4,6">
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding Face}" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                      <Border Height="4" Margin="6,7,6,0" CornerRadius="2" Background="{Binding Accent}"/>
+                    </StackPanel>
+                  </Border>
+                </ControlTemplate>
+              </Button.Template>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBlock Text="Yazı rengi temayla birlikte gelir." Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,8,0,0"/>
 
       <Button Content="Kaydet" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right" Margin="0,18,0,0" MinWidth="108" Click="Save_Click"/>
     </StackPanel>

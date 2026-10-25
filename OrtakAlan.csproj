@@ -9,13 +9,21 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>OrtakAlan</RootNamespace>
     <AssemblyName>OrtakAlan</AssemblyName>
-    <Version>1.2.6</Version>
+    <Version>2.0.1</Version>
     <Product>Ortak Alan</Product>
     <AssemblyTitle>Ortak Alan</AssemblyTitle>
     <Description>Klasör, yazıcı, mesaj ve dosya paylaşımı</Description>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ApplicationIcon>Assets\ikon.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Lisans\**" />
+    <Page Remove="Lisans\**" />
+    <ApplicationDefinition Remove="Lisans\**" />
+    <Resource Remove="Lisans\**" />
+    <None Remove="Lisans\**" />
+    <EmbeddedResource Remove="Lisans\**" />
+  </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\ikon.ico" Link="ikon.ico" CopyToOutputDirectory="PreserveNewest" />
     <Resource Include="Assets\logo.png" />

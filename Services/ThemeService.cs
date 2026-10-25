@@ -2,129 +2,92 @@ using System.Windows.Media;
 
 namespace OrtakAlan;
 
-public sealed record ThemeOption(string Name, Color Color);
-
-public sealed record TextColorOption(string Name, Color? Color);
+public sealed record ThemeSet(
+    string Name,
+    bool Dark,
+    Color Paper,
+    Color Ink,
+    Color Muted,
+    Color Line,
+    Color Wash,
+    Color Bubble,
+    Color Field,
+    Color Accent,
+    Color OnAccent,
+    Color Danger);
 
 public static class ThemeService
 {
-    public static readonly Color Tiffany = Color.FromRgb(0x0A, 0xBA, 0xB5);
-    static readonly Color DarkPaper = Color.FromRgb(0x14, 0x16, 0x1C);
-    static readonly Color OnLight = Color.FromRgb(0x08, 0x20, 0x1E);
-
-    public static readonly IReadOnlyList<ThemeOption> All =
+    public static IReadOnlyList<ThemeSet> Light { get; } =
     [
-        new("Tiffany", Tiffany),
-        new("Mavi", Color.FromRgb(0x3B, 0x82, 0xF6)),
-        new("Lacivert", Color.FromRgb(0x60, 0x7A, 0xF0)),
-        new("Yeşil", Color.FromRgb(0x10, 0xB9, 0x81)),
-        new("Mor", Color.FromRgb(0xA7, 0x8B, 0xFA)),
-        new("Bordo", Color.FromRgb(0xFB, 0x71, 0x85)),
-        new("Grafit", Color.FromRgb(0xCB, 0xD5, 0xE1))
+        Set(false, "Kağıt", "FFFFFF", "111827", "4B5563", "E5E7EB", "F3F4F6", "EEEFF2", "D1D5DB", "0F766E", "FFFFFF", "9F1239"),
+        Set(false, "Keten", "FBF7F2", "1C1917", "57534E", "E7E0D6", "F4EFE8", "EFE6DC", "D6CDC2", "9A3412", "FFFFFF", "9F1239"),
+        Set(false, "Sis", "F4F7FB", "0F172A", "475569", "E2E8F0", "EEF2F6", "E7EDF4", "CBD5E1", "1D4ED8", "FFFFFF", "9F1239"),
+        Set(false, "Nane", "F3F7F4", "13201B", "3E5349", "D7E3DC", "E8F0EB", "E1EBE5", "C3D5CB", "065F46", "FFFFFF", "9F1239"),
+        Set(false, "Lavanta", "F7F6FB", "1E1B2E", "5C5672", "E4E1EF", "F0EEF7", "E9E6F3", "D3CEE3", "6D28D9", "FFFFFF", "9F1239")
     ];
 
-    public static readonly IReadOnlyList<TextColorOption> TextColors =
+    public static IReadOnlyList<ThemeSet> DarkThemes { get; } =
     [
-        new("Otomatik", null),
-        new("Beyaz", Color.FromRgb(0xF9, 0xFA, 0xFB)),
-        new("Açık gri", Color.FromRgb(0xD1, 0xD5, 0xDB)),
-        new("Koyu", Color.FromRgb(0x11, 0x18, 0x27)),
-        new("Lacivert", Color.FromRgb(0x1E, 0x3A, 0x8A)),
-        new("Mavi", Color.FromRgb(0x25, 0x63, 0xEB))
+        Set(true, "Gece", "121418", "F4F6F8", "C1C7D0", "2C323B", "1B1F26", "232830", "3C4450", "2DD4BF", "042F2E", "FDA4AF"),
+        Set(true, "Kömür", "161412", "F6F3EF", "CDC4B8", "342F2A", "211C18", "2B2622", "4A433C", "F59E0B", "1C1403", "FECACA"),
+        Set(true, "Okyanus", "0E151C", "E8F0F7", "B7C5D4", "243140", "16202A", "1C2936", "334155", "38BDF8", "062033", "FECACA"),
+        Set(true, "Orman", "101614", "E7F3EC", "B7CABC", "24312B", "18211C", "1E2B24", "3A4B42", "34D399", "022C22", "FECACA"),
+        Set(true, "Mürekkep", "13111A", "F1EDF8", "C9C1D8", "2E2A3A", "1C1926", "262233", "413C52", "C4B5FD", "1E1033", "FECACA")
     ];
+
+    public static IReadOnlyList<ThemeSet> All { get; } = [..Light, ..DarkThemes];
 
     public static bool Dark { get; private set; }
     public static event Action? Changed;
 
-    public static void Register()
+    public static void Register() => Apply("Kağıt");
+
+    public static ThemeSet Find(string? name) =>
+        All.FirstOrDefault(theme => theme.Name == name) ?? Light[0];
+
+    public static string Canonical(string? theme, string? appearance)
     {
-        Apply("Tiffany");
-        ApplyAppearance("Aydınlık");
+        if (All.Any(item => item.Name == theme)) return theme!;
+        var dark = string.Equals(appearance, "Karanlık", StringComparison.OrdinalIgnoreCase);
+        return theme switch
+        {
+            "Mavi" or "Lacivert" => dark ? "Okyanus" : "Sis",
+            "Yeşil" => dark ? "Orman" : "Nane",
+            "Mor" => dark ? "Mürekkep" : "Lavanta",
+            "Bordo" => dark ? "Kömür" : "Keten",
+            "Grafit" or "Tiffany" => dark ? "Gece" : "Kağıt",
+            _ => dark ? "Gece" : "Kağıt"
+        };
     }
 
     public static void Apply(string? name)
     {
-        var theme = All.FirstOrDefault(t => t.Name == name) ?? All[0];
-        var accent = Tune(theme.Color, Dark);
+        var theme = Find(name);
+        Dark = theme.Dark;
         var resources = System.Windows.Application.Current.Resources;
-        var soft = Dark ? (byte)0x66 : (byte)0x28;
-        Replace(resources, "Accent", accent);
-        Replace(resources, "AccentSoft", Color.FromArgb(soft, accent.R, accent.G, accent.B));
-        Replace(resources, "OnAccent", On(accent));
+        var soft = theme.Dark ? (byte)0x55 : (byte)0x24;
+        Replace(resources, "Paper", theme.Paper);
+        Replace(resources, "Ink", theme.Ink);
+        Replace(resources, "Muted", theme.Muted);
+        Replace(resources, "Line", theme.Line);
+        Replace(resources, "Wash", theme.Wash);
+        Replace(resources, "Bubble", theme.Bubble);
+        Replace(resources, "Field", theme.Field);
+        Replace(resources, "Accent", theme.Accent);
+        Replace(resources, "AccentSoft", Color.FromArgb(soft, theme.Accent.R, theme.Accent.G, theme.Accent.B));
+        Replace(resources, "OnAccent", theme.OnAccent);
+        Replace(resources, "Danger", theme.Danger);
         Changed?.Invoke();
     }
 
-    public static void ApplyAppearance(string? name)
+    static ThemeSet Set(bool dark, string name, string paper, string ink, string muted, string line, string wash, string bubble, string field, string accent, string onAccent, string danger) =>
+        new(name, dark, Hex(paper), Hex(ink), Hex(muted), Hex(line), Hex(wash), Hex(bubble), Hex(field), Hex(accent), Hex(onAccent), Hex(danger));
+
+    static Color Hex(string value)
     {
-        Dark = string.Equals(name, "Karanlık", StringComparison.OrdinalIgnoreCase);
-        var resources = System.Windows.Application.Current.Resources;
-        if (!Dark)
-        {
-            Replace(resources, "Paper", Color.FromRgb(0xFF, 0xFF, 0xFF));
-            Replace(resources, "Ink", Color.FromRgb(0x11, 0x18, 0x27));
-            Replace(resources, "Muted", Color.FromRgb(0x6B, 0x72, 0x80));
-            Replace(resources, "Line", Color.FromRgb(0xE6, 0xE8, 0xEE));
-            Replace(resources, "Wash", Color.FromRgb(0xF7, 0xF8, 0xFA));
-            Replace(resources, "Bubble", Color.FromRgb(0xF3, 0xF4, 0xF6));
-            Replace(resources, "Field", Color.FromRgb(0xD1, 0xD5, 0xDB));
-        }
-        else
-        {
-            Replace(resources, "Paper", DarkPaper);
-            Replace(resources, "Ink", Color.FromRgb(0xF3, 0xF4, 0xF6));
-            Replace(resources, "Muted", Color.FromRgb(0xD1, 0xD5, 0xDB));
-            Replace(resources, "Line", Color.FromRgb(0x3A, 0x41, 0x4E));
-            Replace(resources, "Wash", Color.FromRgb(0x1C, 0x24, 0x2C));
-            Replace(resources, "Bubble", Color.FromRgb(0x26, 0x32, 0x38));
-            Replace(resources, "Field", Color.FromRgb(0x4B, 0x55, 0x63));
-        }
-
-        ApplyText(null);
-        Changed?.Invoke();
-    }
-
-    public static void ApplyText(string? name)
-    {
-        var choice = TextColors.FirstOrDefault(t => t.Name == name);
-        if (choice?.Color == null) return;
-        var color = choice.Color.Value;
-        var paper = Dark ? DarkPaper : Colors.White;
-        if (Contrast(color, paper) < 4.5)
-            color = Dark ? Color.FromRgb(0xF3, 0xF4, 0xF6) : Color.FromRgb(0x11, 0x18, 0x27);
-        Replace(System.Windows.Application.Current.Resources, "Ink", color);
-    }
-
-    public static void ApplySaved(string? theme, string? appearance, string? textColor)
-    {
-        ApplyAppearance(appearance);
-        ApplyText(textColor);
-        Apply(theme);
-    }
-
-    public static Color On(Color background) =>
-        Contrast(Colors.White, background) >= 4.5 ? Colors.White : OnLight;
-
-    public static Color Tune(Color color, bool onDark)
-    {
-        var backdrop = onDark ? DarkPaper : Colors.White;
-        if (Contrast(color, backdrop) >= 4.5) return color;
-        ToHsl(color, out var h, out var s, out var l);
-        if (s < 0.2) s = 0.2;
-        var lo = onDark ? l : 0.12;
-        var hi = onDark ? 0.86 : l;
-        for (var i = 0; i < 16; i++)
-        {
-            var mid = (lo + hi) / 2;
-            var ok = Contrast(FromHsl(h, s, mid), backdrop) >= 4.5;
-            if (onDark)
-            {
-                if (ok) hi = mid;
-                else lo = mid;
-            }
-            else if (ok) lo = mid;
-            else hi = mid;
-        }
-        return FromHsl(h, s, onDark ? hi : lo);
+        var packed = Convert.ToUInt32(value, 16);
+        return Color.FromRgb((byte)(packed >> 16), (byte)(packed >> 8), (byte)packed);
     }
 
     static void Replace(System.Windows.ResourceDictionary resources, string key, Color color)
@@ -133,70 +96,4 @@ public static class ThemeService
             resources.Remove(key);
         resources.Add(key, new SolidColorBrush(color));
     }
-
-    static double Contrast(Color a, Color b)
-    {
-        var hi = Math.Max(Lum(a), Lum(b));
-        var lo = Math.Min(Lum(a), Lum(b));
-        return (hi + 0.05) / (lo + 0.05);
-    }
-
-    static double Lum(Color color) =>
-        0.2126 * Lin(color.R) + 0.7152 * Lin(color.G) + 0.0722 * Lin(color.B);
-
-    static double Lin(byte channel)
-    {
-        var value = channel / 255.0;
-        return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
-    }
-
-    static void ToHsl(Color color, out double h, out double s, out double l)
-    {
-        var r = color.R / 255.0;
-        var g = color.G / 255.0;
-        var b = color.B / 255.0;
-        var max = Math.Max(r, Math.Max(g, b));
-        var min = Math.Min(r, Math.Min(g, b));
-        l = (max + min) / 2;
-        var d = max - min;
-        if (d < 0.0001)
-        {
-            h = 0;
-            s = 0;
-            return;
-        }
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        if (Math.Abs(max - r) < 0.0001) h = (g - b) / d + (g < b ? 6 : 0);
-        else if (Math.Abs(max - g) < 0.0001) h = (b - r) / d + 2;
-        else h = (r - g) / d + 4;
-        h /= 6;
-    }
-
-    static Color FromHsl(double h, double s, double l)
-    {
-        double r, g, b;
-        if (s <= 0)
-            r = g = b = l;
-        else
-        {
-            var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-            var p = 2 * l - q;
-            r = Hue(p, q, h + 1.0 / 3);
-            g = Hue(p, q, h);
-            b = Hue(p, q, h - 1.0 / 3);
-        }
-        return Color.FromRgb(Byte(r), Byte(g), Byte(b));
-    }
-
-    static double Hue(double p, double q, double t)
-    {
-        if (t < 0) t += 1;
-        if (t > 1) t -= 1;
-        if (t < 1.0 / 6) return p + (q - p) * 6 * t;
-        if (t < 0.5) return q;
-        if (t < 2.0 / 3) return p + (q - p) * (2.0 / 3 - t) * 6;
-        return p;
-    }
-
-    static byte Byte(double value) => (byte)Math.Clamp((int)Math.Round(value * 255), 0, 255);
 }

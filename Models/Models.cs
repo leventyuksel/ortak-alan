@@ -43,16 +43,21 @@ public sealed class SettingsModel
 {
     public string ComputerId { get; set; } = Guid.NewGuid().ToString("N");
     public string ComputerName { get; set; } = "";
-    public string Theme { get; set; } = "Tiffany";
+    public string Theme { get; set; } = "Kağıt";
     public string Appearance { get; set; } = "Aydınlık";
     public string TextColor { get; set; } = "Otomatik";
     public bool StartWithWindows { get; set; } = true;
+    public long TrialStartUtc { get; set; }
+    public string LicenseKey { get; set; } = "";
+    public string LicenseNotice { get; set; } = "";
+    public string MachineStamp { get; set; } = "";
     public List<KnownPeer> Approved { get; set; } = new();
     public List<KnownPeer> Rejected { get; set; } = new();
     public List<KnownPeer> People { get; set; } = new();
     public List<KnownPeer> Hidden { get; set; } = new();
     public List<ShareItem> Shares { get; set; } = new();
     public Dictionary<string, string> FolderColors { get; set; } = new();
+    public List<string> QuickMessages { get; set; } = new();
 }
 
 public static class RoomChat
@@ -61,7 +66,7 @@ public static class RoomChat
     public const string Title = "Ortak konuşma";
 }
 
-public sealed record RoomPost(string Id, string Text, string Author, string AuthorId, string? FileName, long UtcTicks);
+public sealed record RoomPost(string Id, string Text, string Author, string AuthorId, string? FileName, long UtcTicks, bool Struck = false);
 
 public sealed record RoomFile(string MessageId, string Author, string AuthorId, string FileName, string Path);
 
@@ -119,6 +124,31 @@ public sealed class ChatLine : Observable
             if (Set(ref _failed, value)) Raise(nameof(ShowTicks));
         }
     }
+
+    bool _struck;
+    public bool Struck
+    {
+        get => _struck;
+        set => Set(ref _struck, value);
+    }
+
+    bool _favorite;
+    public bool Favorite
+    {
+        get => _favorite;
+        set
+        {
+            if (!Set(ref _favorite, value)) return;
+            Raise(nameof(FavoriteGlyph));
+            Raise(nameof(FavoriteTip));
+        }
+    }
+
+    [JsonIgnore]
+    public string FavoriteGlyph => _favorite ? "\uE735" : "\uE734";
+
+    [JsonIgnore]
+    public string FavoriteTip => _favorite ? "Favorilerden çıkar" : "Favorilere ekle";
 
     [JsonIgnore]
     public bool IsFile => !string.IsNullOrEmpty(FileName);
