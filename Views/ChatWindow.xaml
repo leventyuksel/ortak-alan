@@ -106,7 +106,7 @@
 
       <Grid Grid.Row="1">
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="168" MinWidth="120"/>
+          <ColumnDefinition Width="188" MinWidth="140"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <Border Background="{DynamicResource Wash}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,1,0">
@@ -115,12 +115,21 @@
             <Border x:Name="RoomCard" DockPanel.Dock="Top" Margin="8,0,8,4" MinHeight="48" CornerRadius="8" BorderThickness="1.5" Padding="8,6" Cursor="Hand"
                     BorderBrush="#00F0FF" Background="#D008242C" MouseLeftButtonUp="Room_Click">
               <Border.Effect>
-                <DropShadowEffect BlurRadius="12" ShadowDepth="0" Opacity="0.7" Color="#00E5FF"/>
+                <DropShadowEffect BlurRadius="{Binding BreathBlur}" ShadowDepth="0" Opacity="{Binding BreathOpacity}" Color="#00E5FF"/>
               </Border.Effect>
-              <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="Ortak konuşma" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
-                <TextBlock Text="Herkes yazar" FontSize="12" Foreground="#9AF6FF" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
-              </StackPanel>
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="Ortak konuşma" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                  <TextBlock Text="Herkes yazar" FontSize="12" Foreground="#9AF6FF" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                </StackPanel>
+                <Border Grid.Column="1" MinWidth="20" Height="20" Margin="6,0,0,0" Padding="5,0" CornerRadius="10" Background="#128C7E" VerticalAlignment="Center" Visibility="{Binding HasUnread, Converter={StaticResource BoolVis}}">
+                  <TextBlock Text="{Binding UnreadText}" Foreground="White" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+              </Grid>
             </Border>
             <TextBlock DockPanel.Dock="Top" Text="Kişiler" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="12,0,12,2"/>
             <TextBlock x:Name="OnlineText" DockPanel.Dock="Top" FontSize="12" Foreground="{DynamicResource Muted}" Margin="12,0,12,6"/>
@@ -138,8 +147,12 @@
                     <ScrollViewer.Template>
                       <ControlTemplate TargetType="ScrollViewer">
                         <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                          </Grid.ColumnDefinitions>
                           <ScrollContentPresenter/>
-                          <ScrollBar x:Name="PART_VerticalScrollBar" Orientation="Vertical" HorizontalAlignment="Right" Width="6" Margin="0,4,2,4"
+                          <ScrollBar Grid.Column="1" x:Name="PART_VerticalScrollBar" Orientation="Vertical" Width="6" Margin="0,4,2,4"
                                      Minimum="0" Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
                                      Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"
                                      Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"/>
@@ -154,12 +167,21 @@
                 <DataTemplate>
                   <Border MinHeight="48" CornerRadius="8" BorderThickness="1.5" Padding="8,6" BorderBrush="{Binding BoxBorder}" Background="{Binding BoxFill}">
                     <Border.Effect>
-                      <DropShadowEffect BlurRadius="12" ShadowDepth="0" Opacity="0.7" Color="{Binding GlowColor}"/>
+                      <DropShadowEffect BlurRadius="{Binding BreathBlur}" ShadowDepth="0" Opacity="{Binding BreathOpacity}" Color="{Binding GlowColor}"/>
                     </Border.Effect>
-                    <StackPanel VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
-                      <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{Binding BoxBorder}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
-                    </StackPanel>
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                        <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{Binding BoxBorder}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                      </StackPanel>
+                      <Border Grid.Column="1" MinWidth="20" Height="20" Margin="6,0,0,0" Padding="5,0" CornerRadius="10" Background="#128C7E" VerticalAlignment="Center" Visibility="{Binding HasUnread, Converter={StaticResource BoolVis}}">
+                        <TextBlock Text="{Binding UnreadText}" Foreground="White" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      </Border>
+                    </Grid>
                   </Border>
                 </DataTemplate>
               </ListBox.ItemTemplate>

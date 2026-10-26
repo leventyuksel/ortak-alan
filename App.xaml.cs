@@ -20,8 +20,7 @@ public partial class App : Application
     Mutex? _mutex;
     TrayService? _tray;
     ShareWindow? _share;
-    int _unread;
-    readonly HashSet<string> _pending = new(StringComparer.Ordinal);
+    public UnreadBook Unread { get; private set; } = null!;
     ChatWindow? _chat;
     FilesWindow? _files;
     EventWaitHandle? _commandWait;
@@ -48,6 +47,7 @@ public partial class App : Application
 
         ThemeService.Register();
         Store = new SettingsService(dataDir);
+        Unread = new UnreadBook(dataDir);
         Store.Load();
         if (!MachineGuard.Bind(dataDir, Environment.ProcessPath, Store))
         {
@@ -173,6 +173,7 @@ public partial class App : Application
                 () => ShowChat(),
                 ShowSettings,
                 ExitApp);
+            _tray.SetUnread(Unread.Total);
         }
 
         if (!_demo)
@@ -225,7 +226,7 @@ public partial class App : Application
 
     public void ToggleChat()
     {
-        if (_chat is { IsVisible: true } && _unread == 0) _chat.Hide();
+        if (_chat is { IsVisible: true } && Unread.Total == 0) _chat.Hide();
         else ShowChat();
     }
 
@@ -244,9 +245,9 @@ public partial class App : Application
 
     public void MarkRead(string? peerId)
     {
-        if (string.IsNullOrEmpty(peerId) || !_pending.Remove(peerId)) return;
-        _unread = _pending.Count;
-        _tray?.SetUnread(_unread);
+        if (string.IsNullOrEmpty(peerId)) return;
+        Unread.Clear(peerId);
+        _tray?.SetUnread(Unread.Total);
     }
 
     public void ShowChat(string? peerId = null)
@@ -368,8 +369,9 @@ public partial class App : Application
             Text = message.Text,
             Utc = DateTime.Now
         });
-        Notice(message.PeerId, message.PeerName, message.Text);
-        if (added) AskRestore(message.PeerId, message.PeerName);
+        if (!added) return;
+        Notice(message.PeerId, message.PeerName, message.Text, message.MessageId);
+        AskRestore(message.PeerId, message.PeerName);
     }
 
     void OnFile(IncomingFile file)
@@ -385,8 +387,9 @@ public partial class App : Application
             Status = "Alındı",
             Utc = DateTime.Now
         });
-        Notice(file.PeerId, file.PeerName, "Dosya: " + file.FileName);
-        if (added) AskRestore(file.PeerId, file.PeerName);
+        if (!added) return;
+        Notice(file.PeerId, file.PeerName, "Dosya: " + file.FileName, file.MessageId);
+        AskRestore(file.PeerId, file.PeerName);
     }
 
     void AskRestore(string id, string name)
@@ -473,7 +476,7 @@ public partial class App : Application
         };
         if (!Chats.Add(RoomChat.Id, line)) return;
         if (!mine)
-            Notice(RoomChat.Id, post.Author.Length == 0 ? "Ortak konuşma" : post.Author, string.IsNullOrEmpty(post.FileName) ? post.Text : "Dosya: " + post.FileName);
+            Notice(RoomChat.Id, post.Author.Length == 0 ? "Ortak konuşma" : post.Author, string.IsNullOrEmpty(post.FileName) ? post.Text : "Dosya: " + post.FileName, post.Id);
     }
 
     void OnRoomFile(RoomFile file)
@@ -495,7 +498,7 @@ public partial class App : Application
                 Utc = DateTime.Now
             })) return;
             if (!mine)
-                Notice(RoomChat.Id, file.Author.Length == 0 ? "Ortak konuşma" : file.Author, "Dosya: " + file.FileName);
+                Notice(RoomChat.Id, file.Author.Length == 0 ? "Ortak konuşma" : file.Author, "Dosya: " + file.FileName, file.MessageId);
             return;
         }
 
@@ -513,12 +516,11 @@ public partial class App : Application
         _tray?.Balloon(job.PeerName, text);
     }
 
-    void Notice(string peerId, string title, string text)
+    void Notice(string peerId, string title, string text, string messageId)
     {
         if (_chat is { IsVisible: true } && _chat.SelectedId == peerId) return;
-        _pending.Add(peerId);
-        _unread = _pending.Count;
-        _tray?.SetUnread(_unread);
+        Unread.Add(peerId, messageId);
+        _tray?.SetUnread(Unread.Total);
         _tray?.Balloon(title, text);
     }
 

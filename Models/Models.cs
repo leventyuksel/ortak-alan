@@ -226,6 +226,45 @@ public sealed class PeerVm : Observable
     public Brush BoxFill => Online ? OnlineFill : OfflineFill;
     public Color GlowColor => Online ? Color.FromRgb(0x39, 0xFF, 0x6A) : Color.FromRgb(0xFF, 0x3B, 0x4A);
 
+    int _unread;
+    public int Unread
+    {
+        get => _unread;
+        set
+        {
+            if (!Set(ref _unread, value)) return;
+            Raise(nameof(HasUnread));
+            Raise(nameof(UnreadText));
+        }
+    }
+
+    public bool HasUnread => _unread > 0;
+    public string UnreadText => _unread > 99 ? "99+" : _unread.ToString();
+
+    double _breathOpacity = 0.7;
+    public double BreathOpacity
+    {
+        get => _breathOpacity;
+        set
+        {
+            if (Math.Abs(_breathOpacity - value) < 0.02) return;
+            _breathOpacity = value;
+            Raise(nameof(BreathOpacity));
+        }
+    }
+
+    double _breathBlur = 12;
+    public double BreathBlur
+    {
+        get => _breathBlur;
+        set
+        {
+            if (Math.Abs(_breathBlur - value) < 0.4) return;
+            _breathBlur = value;
+            Raise(nameof(BreathBlur));
+        }
+    }
+
     public string Status => !Online ? "Çevrimdışı" : TailscalePeers.IsAddress(Ip) ? "Çevrimiçi · Tailscale" : "Çevrimiçi";
     public Brush Dot => Online ? OnlineBrush : OfflineBrush;
     public string Ip { get; private set; } = "127.0.0.1";

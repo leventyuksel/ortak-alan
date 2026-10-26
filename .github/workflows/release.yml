@@ -42,7 +42,7 @@ jobs:
 
             Kurulum için OrtakAlan-Setup.exe dosyasını çalıştırın. Kullanım Ortak-Alan.pdf dosyasındadır.
 
-            Sürüm 2.0.2. Karanlık temada Favoriler ve Sabit mesajlar seçilince okunur. Künye yuvarlaktır; yeni sürümde çerçevesi sarı yanıp söner, ünlem logonun köşesindedir.
+            Sürüm 2.0.3. Okunmamış mesajlar kişi kutusunda ve Ortak konuşmada sayaçla görünür. Yeni mesajı olan kutu yavaşça parlayıp söner. Konuşma açılınca sayaç silinir.
 
             Program 30 günlük deneme ile açılır. Lisanssız en çok beş kullanıcı eklenir. Anahtar bir bilgisayarda girilince aynı ağdaki diğer bilgisayarlar programı yeniden açtığında lisanslı olur. Program klasörü başka bilgisayara kopyalanırsa orada açılmaz.
 

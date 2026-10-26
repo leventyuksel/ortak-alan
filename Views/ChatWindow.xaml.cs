@@ -9,6 +9,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 
 namespace OrtakAlan.Views;
 
@@ -22,6 +23,9 @@ public partial class ChatWindow : ChromeWindow
     bool _holdSelection;
     bool _favoritesOnly;
     SolidColorBrush? _frameBrush;
+    readonly RoomPulse _room = new();
+    readonly DispatcherTimer _breath;
+    double _breathPhase;
     public string? SelectedId { get; private set; }
 
     public ChatWindow()
@@ -38,13 +42,25 @@ public partial class ChatWindow : ChromeWindow
         ShowUpdateIcon();
         _people = new ListCollectionView(App.Me.Directory.Peers);
         _people.Filter = FilterPerson;
+        _people.SortDescriptions.Add(new SortDescription(nameof(PeerVm.Unread), ListSortDirection.Descending));
         _people.SortDescriptions.Add(new SortDescription(nameof(PeerVm.Online), ListSortDirection.Descending));
         _people.SortDescriptions.Add(new SortDescription(nameof(PeerVm.Name), ListSortDirection.Ascending));
+        _people.LiveSortingProperties.Add(nameof(PeerVm.Unread));
         _people.LiveSortingProperties.Add(nameof(PeerVm.Online));
         _people.LiveSortingProperties.Add(nameof(PeerVm.Name));
         _people.IsLiveSorting = true;
         PeerList.ItemsSource = _people;
         QuickList.ItemsSource = _quick;
+        RoomCard.DataContext = _room;
+        _breath = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        _breath.Tick += (_, _) => Breathe();
+        App.Me.Unread.Changed += ApplyUnread;
+        Closed += (_, _) =>
+        {
+            App.Me.Unread.Changed -= ApplyUnread;
+            _breath.Stop();
+        };
+        ApplyUnread();
         Title = "Ortak Alan — " + App.Me.Settings.ComputerName;
         App.Me.Directory.Changed += RefreshPeers;
         RefreshPeers();
@@ -94,9 +110,49 @@ public partial class ChatWindow : ChromeWindow
         Activate();
     }
 
+    void ApplyUnread()
+    {
+        _room.Unread = App.Me.Unread.Count(RoomChat.Id);
+        foreach (PeerVm peer in App.Me.Directory.Peers)
+            peer.Unread = App.Me.Unread.Count(peer.Id);
+        if (App.Me.Unread.Total > 0)
+        {
+            if (!_breath.IsEnabled) _breath.Start();
+            return;
+        }
+        _breath.Stop();
+        _room.BreathOpacity = 0.7;
+        _room.BreathBlur = 12;
+        foreach (PeerVm peer in App.Me.Directory.Peers)
+        {
+            peer.BreathOpacity = 0.7;
+            peer.BreathBlur = 12;
+        }
+    }
+
+    void Breathe()
+    {
+        _breathPhase += 0.14;
+        var wave = (Math.Sin(_breathPhase) + 1) / 2;
+        var opacity = 0.22 + wave * 0.78;
+        var blur = 5 + wave * 16;
+        if (_room.HasUnread)
+        {
+            _room.BreathOpacity = opacity;
+            _room.BreathBlur = blur;
+        }
+        foreach (PeerVm peer in App.Me.Directory.Peers)
+        {
+            if (!peer.HasUnread) continue;
+            peer.BreathOpacity = opacity;
+            peer.BreathBlur = blur;
+        }
+    }
+
     void RefreshPeers()
     {
         OnlineText.Text = App.Me.Directory.OnlineCount + " çevrimiçi";
+        ApplyUnread();
         UpdatePeopleEmpty();
         if (SelectedId == null || SelectedId == RoomChat.Id) return;
         var peer = App.Me.Directory.Peers.FirstOrDefault(p => p.Id == SelectedId);
@@ -216,6 +272,48 @@ public partial class ChatWindow : ChromeWindow
         foreach (var text in App.Me.Store.CopyQuick())
             _quick.Add(text);
         QuickEmpty.Visibility = _quick.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    sealed class RoomPulse : Observable
+    {
+        int _unread;
+        public int Unread
+        {
+            get => _unread;
+            set
+            {
+                if (!Set(ref _unread, value)) return;
+                Raise(nameof(HasUnread));
+                Raise(nameof(UnreadText));
+            }
+        }
+
+        public bool HasUnread => _unread > 0;
+        public string UnreadText => _unread > 99 ? "99+" : _unread.ToString();
+
+        double _breathOpacity = 0.7;
+        public double BreathOpacity
+        {
+            get => _breathOpacity;
+            set
+            {
+                if (Math.Abs(_breathOpacity - value) < 0.02) return;
+                _breathOpacity = value;
+                Raise(nameof(BreathOpacity));
+            }
+        }
+
+        double _breathBlur = 12;
+        public double BreathBlur
+        {
+            get => _breathBlur;
+            set
+            {
+                if (Math.Abs(_breathBlur - value) < 0.4) return;
+                _breathBlur = value;
+                Raise(nameof(BreathBlur));
+            }
+        }
     }
 
     void QuickInput_TextChanged(object sender, TextChangedEventArgs e) =>
