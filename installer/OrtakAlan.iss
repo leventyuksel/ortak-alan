@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "2.0.3"
+  #define MyAppVersion "2.0.4"
 #endif
 
 #define MyAppName "Ortak Alan"
@@ -44,3 +44,50 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Ortak Alan'ı başlat"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function RunFirewall(Remove: Boolean): Boolean;
+var
+  Exe, Params: String;
+  Code: Integer;
+begin
+  Exe := ExpandConstant('{app}\{#MyAppExeName}');
+  if not FileExists(Exe) then
+  begin
+    Log('Güvenlik duvarı: program dosyası yok.');
+    Result := False;
+    Exit;
+  end;
+  if Remove then
+    Params := '--guvenlik-duvari --kaldir'
+  else
+    Params := '--guvenlik-duvari';
+  Code := 1;
+  if IsAdminInstallMode then
+    Result := Exec(Exe, Params, '', SW_HIDE, ewWaitUntilTerminated, Code)
+  else
+    Result := ShellExec('runas', Exe, Params, '', SW_SHOWNORMAL, ewWaitUntilTerminated, Code);
+  if Result then
+    Result := Code = 0;
+  Log('Güvenlik duvarı çıkış kodu: ' + IntToStr(Code));
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep <> ssPostInstall then
+    Exit;
+  if (not IsAdminInstallMode) and (not WizardSilent) then
+    MsgBox('Diğer bilgisayarların bu bilgisayarı görebilmesi için Ortak Alan, Windows güvenlik duvarına eklenecek. Açılan pencerede Evet''e basın.', mbInformation, MB_OK);
+  if not RunFirewall(False) then
+    if not WizardSilent then
+      MsgBox('Güvenlik duvarına eklenemedi. Kurulumu yeniden çalıştırıp izin penceresinde Evet''e basın.', mbError, MB_OK);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep <> usUninstall then
+    Exit;
+  if (not IsAdminInstallMode) and (not UninstallSilent) then
+    MsgBox('Güvenlik duvarındaki Ortak Alan izni kaldırılacak. Açılan pencerede Evet''e basın.', mbInformation, MB_OK);
+  RunFirewall(True);
+end;

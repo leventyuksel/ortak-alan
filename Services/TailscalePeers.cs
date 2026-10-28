@@ -17,7 +17,7 @@ static class TailscalePeers
     public static void Start(CancellationToken token)
     {
         _ = Task.Run(() => Loop(token));
-        _ = Task.Run(AllowProgram);
+        _ = Task.Run(() => FirewallService.Apply(false));
     }
 
     public static bool IsAddress(string text) =>
@@ -122,26 +122,4 @@ static class TailscalePeers
         return File.Exists(local) ? local : null;
     }
 
-    static void AllowProgram()
-    {
-        var exe = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(exe) || !File.Exists(exe)) return;
-        Netsh("advfirewall firewall delete rule name=\"Ortak Alan\"");
-        Netsh("advfirewall firewall add rule name=\"Ortak Alan\" dir=in action=allow program=\"" + exe + "\" enable=yes profile=any");
-    }
-
-    static void Netsh(string arguments)
-    {
-        try
-        {
-            var start = new ProcessStartInfo("netsh", arguments)
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(start);
-            process?.WaitForExit(8000);
-        }
-        catch { /* yönetici izni yoksa Windows kendi sorusuna bırakılır */ }
-    }
 }

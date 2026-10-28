@@ -33,6 +33,11 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (HasFlag(e.Args, "--guvenlik-duvari"))
+        {
+            var ok = FirewallService.Apply(HasFlag(e.Args, "--kaldir"));
+            Environment.Exit(ok ? 0 : 1);
+        }
         DispatcherUnhandledException += (_, args) =>
         {
             Log.Write(args.Exception);
