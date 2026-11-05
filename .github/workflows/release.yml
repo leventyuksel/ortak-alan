@@ -42,7 +42,7 @@ jobs:
 
             Kurulum için OrtakAlan-Setup.exe dosyasını çalıştırın. Kullanım Ortak-Alan.pdf dosyasındadır.
 
-            Sürüm 2.0.4. Kurulum, Ortak Alan'ı Windows güvenlik duvarına ekler. Özel, ortak ve etki alanı ağlarında sohbet, dosya ve yazıcı bağlantısı açık kalır. Kurulumda izin penceresinde Evet'e basın.
+            Sürüm 2.0.5. Aynı ağdaki bilgisayarlar birbirini izin sormadan ekler. Farklı ağdan gelen bağlantıda izin sorusu durur. Kurulum, programı Windows güvenlik duvarına ekler; izin penceresinde Evet'e basın.
 
             Program 30 günlük deneme ile açılır. Lisanssız en çok beş kullanıcı eklenir. Anahtar bir bilgisayarda girilince aynı ağdaki diğer bilgisayarlar programı yeniden açtığında lisanslı olur. Program klasörü başka bilgisayara kopyalanırsa orada açılmaz.
 

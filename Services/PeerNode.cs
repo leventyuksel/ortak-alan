@@ -841,6 +841,8 @@ public sealed class PeerNode : IDisposable
         }
 
         TakeLicense(reply.Value);
+        if (SameLan(peer.Ip) && !_store.IsApproved(peer.Id) && !_store.IsRejected(peer.Id))
+            _store.Decide(peer.Id, peer.Name, true);
         ReplaceLink(link);
         _ = Task.Run(() => ReadLoop(link));
         _ = SendRoomHistory(link);
@@ -890,7 +892,8 @@ public sealed class PeerNode : IDisposable
             link.PeerId = id;
             link.PeerName = string.IsNullOrWhiteSpace(name) ? "Bilgisayar" : name;
             TakeLicense(first.Value);
-            var decision = await ApproveOnce(id, link.PeerName);
+            IPAddress? remote = client.Client.RemoteEndPoint is IPEndPoint end ? end.Address : null;
+            var decision = await ApproveOnce(id, link.PeerName, remote);
             if (decision == true)
             {
                 var welcome = Obj(("t", "welcome"));
@@ -918,13 +921,13 @@ public sealed class PeerNode : IDisposable
         }
     }
 
-    Task<bool?> ApproveOnce(string id, string name)
+    Task<bool?> ApproveOnce(string id, string name, IPAddress? remote)
     {
-        var lazy = _approvals.GetOrAdd(id, _ => new Lazy<Task<bool?>>(() => AskCore(id, name)));
+        var lazy = _approvals.GetOrAdd(id, _ => new Lazy<Task<bool?>>(() => AskCore(id, name, remote)));
         return lazy.Value;
     }
 
-    async Task<bool?> AskCore(string id, string name)
+    async Task<bool?> AskCore(string id, string name, IPAddress? remote)
     {
         try
         {
@@ -934,6 +937,11 @@ public sealed class PeerNode : IDisposable
             {
                 LicenseService.NotifySeat();
                 return null;
+            }
+            if (remote != null && SameLan(remote))
+            {
+                _store.Decide(id, name, true);
+                return true;
             }
             var decision = await _approve(id, name);
             if (decision == true) _store.Decide(id, name, true);
@@ -1858,6 +1866,41 @@ public sealed class PeerNode : IDisposable
             peer.SeenUtc = DateTime.UtcNow;
         }
         Publish();
+    }
+
+    public static bool SameLan(string address) =>
+        IPAddress.TryParse(address, out var ip) && SameLan(ip);
+
+    public static bool SameLan(IPAddress remote)
+    {
+        if (remote.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(remote) || TailscalePeers.IsAddress(remote))
+            return false;
+        var remoteBytes = remote.GetAddressBytes();
+        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                continue;
+            foreach (var unicast in nic.GetIPProperties().UnicastAddresses)
+            {
+                if (unicast.Address.AddressFamily != AddressFamily.InterNetwork || unicast.IPv4Mask == null)
+                    continue;
+                if (TailscalePeers.IsAddress(unicast.Address)) continue;
+                var local = unicast.Address.GetAddressBytes();
+                var mask = unicast.IPv4Mask.GetAddressBytes();
+                if (mask.All(part => part == 0)) continue;
+                var same = true;
+                for (var i = 0; i < 4; i++)
+                {
+                    if ((local[i] & mask[i]) != (remoteBytes[i] & mask[i]))
+                    {
+                        same = false;
+                        break;
+                    }
+                }
+                if (same) return true;
+            }
+        }
+        return false;
     }
 
     static void RememberAddress(PeerState peer, IPAddress source, bool lan, IPAddress? announced)

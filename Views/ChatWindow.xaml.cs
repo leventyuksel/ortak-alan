@@ -408,7 +408,7 @@ public partial class ChatWindow : ChromeWindow
             return;
         }
 
-        var already = App.Me.Store.IsApproved(peer.Id);
+        var already = App.Me.Store.IsApproved(peer.Id) || PeerNode.SameLan(peer.Ip);
         StatusText.Text = already
             ? "Bağlanılıyor…"
             : "Onay isteği gönderildi. Karşı bilgisayar cevaplıyor…";
@@ -527,7 +527,9 @@ public partial class ChatWindow : ChromeWindow
             var peer = App.Me.Directory.Peers.FirstOrDefault(p => p.Id == id);
             StatusText.Text = peer is { Online: false }
                 ? "Çevrimdışı. Mesaj açılınca iletilir."
-                : App.Me.Store.IsApproved(id) ? "" : "İlk mesajda karşı bilgisayardan bir kez izin istenir.";
+                : App.Me.Store.IsApproved(id) || (peer != null && PeerNode.SameLan(peer.Ip))
+                    ? ""
+                    : "İlk mesajda karşı bilgisayardan bir kez izin istenir.";
         }
         UpdateChatEmpty();
         ScrollEnd();
