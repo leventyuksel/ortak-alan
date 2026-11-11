@@ -1,0 +1,10 @@
+---
+description: Windows ve macOS birlikte değişir ve birlikte yayınlanır
+alwaysApply: true
+---
+
+# İki platform
+
+Ortak Alan’da yapılan her davranış değişikliği hem Windows (`OrtakAlan.csproj`) hem de macOS (`mac/`) tarafında aynı şekilde uygulanır.
+
+Yayın istendiğinde sürüm numarası iki projede de aynıdır. GitHub yayını Windows kurulumunu ve iki macOS arşivini birlikte içerir: `OrtakAlan-osx-arm64.app.tar.gz` ve `OrtakAlan-osx-x64.app.tar.gz`. Yalnız bir platformun paketini yayınlama.

@@ -1,5 +1,6 @@
 ﻿$ErrorActionPreference = "Stop"
 $dotnet = "C:\Users\Lvnt\AppData\Local\Microsoft\dotnet\dotnet.exe"
+if (-not (Test-Path $dotnet)) { $dotnet = "dotnet" }
 $proj = Join-Path $PSScriptRoot "OrtakAlan.Mac.csproj"
 $plist = Join-Path $PSScriptRoot "Info.plist"
 $root = Join-Path (Split-Path $PSScriptRoot -Parent) "dist\macos"

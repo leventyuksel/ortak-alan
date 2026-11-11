@@ -35,12 +35,17 @@ jobs:
       - name: Rehber
         shell: pwsh
         run: Copy-Item "docs/Ortak Alan.pdf" -Destination Ortak-Alan.pdf
+      - name: macOS
+        shell: pwsh
+        run: ./mac/paketle.ps1
       - uses: softprops/action-gh-release@v2
         with:
           body: |
-            Ortak Alan, Windows bilgisayarların birbirine klasör, yazıcı, mesaj ve dosya ulaştırması için yapılır.
+            Ortak Alan, Windows ve macOS bilgisayarların birbirine klasör, yazıcı, mesaj ve dosya ulaştırması için yapılır.
 
-            Kurulum için OrtakAlan-Setup.exe dosyasını çalıştırın. Kullanım Ortak-Alan.pdf dosyasındadır.
+            Windows kurulumu için OrtakAlan-Setup.exe dosyasını çalıştırın. Kullanım Ortak-Alan.pdf dosyasındadır.
+
+            Mac için Apple Silicon arşivi OrtakAlan-osx-arm64.app.tar.gz, Intel Mac arşivi OrtakAlan-osx-x64.app.tar.gz dosyasıdır. Arşivi açın, uygulamaya sağ tıklayıp Aç deyin.
 
             Sürüm 2.0.6. Program 7 gün ve 3 bilgisayarlık kullanımla açılır. Süre dolunca program açılır ve lisans ister; anahtar girilmeden sohbet, dosya, ekran alıntısı ve yazıcı çalışmaz.
 
@@ -51,3 +56,5 @@ jobs:
             dist/OrtakAlan-Setup.exe
             OrtakAlan-win-x64.zip
             Ortak-Alan.pdf
+            dist/macos/OrtakAlan-osx-arm64.app.tar.gz
+            dist/macos/OrtakAlan-osx-x64.app.tar.gz
