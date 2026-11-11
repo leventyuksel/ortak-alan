@@ -1,0 +1,67 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OrtakAlan.Mac.MainWindow"
+        Title="Ortak Alan"
+        Width="980" Height="680"
+        MinWidth="760" MinHeight="520"
+        Background="#0B1220"
+        WindowStartupLocation="CenterScreen">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="#0E1A2B" Padding="14,8">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+        <Border Width="36" Height="36" CornerRadius="18" Background="White" ClipToBounds="True">
+          <Image Source="avares://OrtakAlan/Assets/logo.png" Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+        <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
+          <TextBlock Text="Ortak Alan" Foreground="White" FontSize="16" FontWeight="SemiBold"/>
+          <TextBlock x:Name="LicenseText" Foreground="#9FB0C3" FontSize="12"/>
+        </StackPanel>
+        <Button x:Name="PrinterButton" Grid.Column="2" Content="Yazıcıyı ekle" Margin="0,0,8,0" Click="Printer_Click" Background="#0F766E" Foreground="White"/>
+        <Button Grid.Column="3" Content="Lisans" Margin="0,0,8,0" Click="License_Click" Background="#16324A" Foreground="White"/>
+        <Button x:Name="ShareButton" Grid.Column="4" Content="Paylaş" Click="Share_Click" Background="#16324A" Foreground="White"/>
+      </Grid>
+    </Border>
+
+    <Border DockPanel.Dock="Bottom" Background="#0E1A2B" Padding="12">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+        <TextBox x:Name="Input" Watermark="Mesaj yazın" Background="#122033" Foreground="White" Padding="10,8" CornerRadius="8"/>
+        <Button x:Name="ScreenButton" Grid.Column="1" Content="Ekran" Margin="8,0,0,0" Click="Screen_Click" Background="#16324A" Foreground="White"/>
+        <Button x:Name="FileButton" Grid.Column="2" Content="Dosya" Margin="8,0,0,0" Click="File_Click" Background="#16324A" Foreground="White"/>
+        <Button x:Name="SendButton" Grid.Column="3" Content="Gönder" Margin="8,0,0,0" Click="Send_Click" Background="#0F766E" Foreground="White"/>
+      </Grid>
+    </Border>
+
+    <Border DockPanel.Dock="Left" Width="230" Background="#09101A">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top" x:Name="SelfName" Margin="14,12,14,6" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+        <ListBox x:Name="People" Background="Transparent" BorderThickness="0" SelectionChanged="People_Changed">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Margin="4,6">
+                <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding Subtitle}" Foreground="#9FB0C3" FontSize="12"/>
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+
+    <DockPanel>
+      <TextBlock DockPanel.Dock="Top" x:Name="ChatTitle" Margin="16,12,16,4" Foreground="White" FontSize="16" FontWeight="SemiBold" Text="Ortak konuşma"/>
+      <TextBlock DockPanel.Dock="Bottom" x:Name="StatusText" Margin="16,4,16,8" Foreground="#9FB0C3" FontSize="12"/>
+      <ListBox x:Name="Transcript" Background="Transparent" BorderThickness="0" Margin="8,0">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <Border Margin="8,4" Padding="10,8" CornerRadius="10" Background="#122033" MaxWidth="520" HorizontalAlignment="{Binding Align}">
+              <StackPanel>
+                <TextBlock Text="{Binding Author}" Foreground="#5EEAD4" FontSize="12" IsVisible="{Binding ShowAuthor}"/>
+                <TextBlock Text="{Binding Body}" Foreground="White" TextWrapping="Wrap"/>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+  </DockPanel>
+</Window>

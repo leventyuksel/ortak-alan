@@ -4,9 +4,10 @@ namespace OrtakAlan;
 
 public static class LicenseService
 {
-    public const int TrialDays = 30;
-    public const int FreeUsers = 5;
-    public const string SeatStatus = "Daha fazla kullanıcı için lisans gerekir.";
+    public const int TrialDays = 7;
+    public const int FreeUsers = 3;
+    public const string SeatStatus = "Üç bilgisayardan fazlası için lisans gerekir.";
+    public const string LockedStatus = "Kullanım süresi doldu. Lisans girilmeden işlem yapılamaz.";
 
     static SettingsService? _store;
 
@@ -20,14 +21,18 @@ public static class LicenseService
     public static event Action? Changed;
     public static event Action? Adopted;
     public static string Key => IsLicensed ? _store?.Current.LicenseKey ?? "" : "";
+    public static bool Usable => IsLicensed || !TrialEnded;
+    public static string StopText => Usable ? SeatStatus : LockedStatus;
 
     public static string BlockText =>
-        IsLicensed
-            ? "Lisanstaki kullanıcı sınırına ulaşıldı."
-            : "Beş kullanıcıdan fazlası için lisans gerekir. Program bu beş kullanıcıyla çalışmaya devam eder. Lisans için " + LicenseCodec.Contact + " adresine yazın. Anahtarı künyeye girin.";
+        Usable
+            ? (IsLicensed
+                ? "Lisanstaki bilgisayar sınırına ulaşıldı."
+                : SeatStatus + " Lisans için " + LicenseCodec.Contact + " adresine yazın. Anahtarı künyeye girin.")
+            : "7 günlük kullanım süresi doldu. Program açık kalır. Lisans girilmeden sohbet, dosya, ekran alıntısı ve yazıcı çalışmaz. Lisans için " + LicenseCodec.Contact + " adresine yazın. Anahtarı künyeye girin.";
 
     public static string TrialText =>
-        "30 günlük deneme süresi doldu. Program çalışmaya devam eder. Lisans için " + LicenseCodec.Contact + " adresine yazın. Anahtarı künyeye girin.";
+        "7 günlük kullanım süresi doldu. Program açık kalır. Lisans girilmeden sohbet, dosya, ekran alıntısı ve yazıcı çalışmaz. Lisans için " + LicenseCodec.Contact + " adresine yazın. Anahtarı künyeye girin.";
 
     public static void Start(SettingsService store)
     {
@@ -49,12 +54,7 @@ public static class LicenseService
 
     public static bool ShouldRemind()
     {
-        if (_store == null || IsLicensed || !TrialEnded) return false;
-        var day = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        if (_store.Current.LicenseNotice == day) return false;
-        _store.Current.LicenseNotice = day;
-        _store.Save();
-        return true;
+        return _store != null && !Usable;
     }
 
     public static bool TryAccept(string key, out string error)
@@ -128,6 +128,7 @@ public static class LicenseService
 
     public static bool Fits(SettingsModel model, string id)
     {
+        if (!Usable) return false;
         if (IsKnown(model, id)) return true;
         return Count(model) < Limit;
     }
@@ -155,15 +156,16 @@ public static class LicenseService
     {
         if (IsLicensed)
             return LicenseName.Length == 0 ? "Lisanslı" : "Lisanslı · " + LicenseName;
-        if (TrialEnded) return "Deneme süresi doldu";
-        return TrialDaysLeft == 1 ? "Deneme: 1 gün kaldı" : "Deneme: " + TrialDaysLeft + " gün kaldı";
+        if (!Usable) return "Lisans gerekli";
+        return TrialDaysLeft == 1 ? "1 gün kaldı" : TrialDaysLeft + " gün kaldı";
     }
 
     public static string UsersLine(int count)
     {
-        if (IsLicensed && Seats == 0) return count + " kullanıcı · sınır yok";
+        if (!IsLicensed && !Usable) return "Lisans gerekli";
+        if (IsLicensed && Seats == 0) return count + " bilgisayar · sınır yok";
         var cap = IsLicensed ? Seats : FreeUsers;
-        return count + " / " + cap + " kullanıcı";
+        return count + " / " + cap + " bilgisayar";
     }
 
     static void ApplyKey(string? key)

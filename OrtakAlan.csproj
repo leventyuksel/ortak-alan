@@ -9,7 +9,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>OrtakAlan</RootNamespace>
     <AssemblyName>OrtakAlan</AssemblyName>
-    <Version>2.0.5</Version>
+    <Version>2.0.6</Version>
     <Product>Ortak Alan</Product>
     <AssemblyTitle>Ortak Alan</AssemblyTitle>
     <Description>Klasör, yazıcı, mesaj ve dosya paylaşımı</Description>
@@ -18,11 +18,16 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="Lisans\**" />
+    <Compile Remove="mac\**" />
     <Page Remove="Lisans\**" />
+    <Page Remove="mac\**" />
     <ApplicationDefinition Remove="Lisans\**" />
+    <ApplicationDefinition Remove="mac\**" />
     <Resource Remove="Lisans\**" />
     <None Remove="Lisans\**" />
+    <None Remove="mac\**" />
     <EmbeddedResource Remove="Lisans\**" />
+    <EmbeddedResource Remove="mac\**" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\ikon.ico" Link="ikon.ico" CopyToOutputDirectory="PreserveNewest" />

@@ -87,7 +87,7 @@ public sealed class PeerNode : IDisposable
         if (!_store.Allows(peerId))
         {
             LicenseService.NotifySeat();
-            return LicenseService.SeatStatus;
+            return LicenseService.StopText;
         }
         if (Rejected(peerId)) return "Bu bilgisayar isteği reddetti.";
         if (!IsOnline(peerId))
@@ -126,7 +126,7 @@ public sealed class PeerNode : IDisposable
 
     public async Task SendDropAsync(string peerId, string messageId)
     {
-        if (peerId.Length == 0 || messageId.Length == 0) return;
+        if (!LicenseService.Usable || peerId.Length == 0 || messageId.Length == 0) return;
         if (TryLink(peerId, out var open) && open != null)
         {
             try
@@ -145,7 +145,7 @@ public sealed class PeerNode : IDisposable
 
     public async Task BroadcastDropAsync(string messageId)
     {
-        if (messageId.Length == 0) return;
+        if (!LicenseService.Usable || messageId.Length == 0) return;
         var body = Obj(("t", "drop"), ("chat", RoomChat.Id), ("id", messageId));
         foreach (var peerId in OnlineIds())
         {
@@ -185,7 +185,7 @@ public sealed class PeerNode : IDisposable
 
     public async Task FlushAsync(string peerId)
     {
-        if (!IsOnline(peerId) || Holding(peerId)) return;
+        if (!LicenseService.Usable || !IsOnline(peerId) || Holding(peerId)) return;
         await _flush.WaitAsync(_cts.Token);
         try
         {
@@ -271,7 +271,7 @@ public sealed class PeerNode : IDisposable
         if (!_store.Allows(peerId))
         {
             LicenseService.NotifySeat();
-            return LicenseService.SeatStatus;
+            return LicenseService.StopText;
         }
         if (Rejected(peerId)) return "Bu bilgisayar isteği reddetti.";
         var id = string.IsNullOrEmpty(messageId) ? Guid.NewGuid().ToString("N") : messageId;
@@ -302,6 +302,11 @@ public sealed class PeerNode : IDisposable
 
     public async Task<string?> BroadcastRoomAsync(ChatLine line)
     {
+        if (!LicenseService.Usable)
+        {
+            LicenseService.NotifySeat();
+            return LicenseService.LockedStatus;
+        }
         NoteRoom(line.Id);
         var ticks = line.Utc.Kind == DateTimeKind.Utc ? line.Utc.Ticks : line.Utc.ToUniversalTime().Ticks;
         return await BroadcastRoom(line.Id, line.Text, line.FileName ?? "", line.Author.Length == 0 ? _settings.ComputerName : line.Author, line.AuthorId.Length == 0 ? _settings.ComputerId : line.AuthorId, ticks);
@@ -309,6 +314,11 @@ public sealed class PeerNode : IDisposable
 
     public async Task<string?> SendRoomFileAsync(string messageId, string path)
     {
+        if (!LicenseService.Usable)
+        {
+            LicenseService.NotifySeat();
+            return LicenseService.LockedStatus;
+        }
         if (!File.Exists(path)) return "Dosya bulunamadı";
         var info = new FileInfo(path);
         if (info.Length > MaxFileBytes) return "Dosya 150 MB sınırını aşıyor";
@@ -328,6 +338,7 @@ public sealed class PeerNode : IDisposable
 
     public async Task<(string? Error, string? Path)> FetchRoomFileAsync(string messageId, string fileName, string preferredPeer)
     {
+        if (!LicenseService.Usable) return (LicenseService.LockedStatus, null);
         var peers = new List<string>();
         if (preferredPeer.Length > 0) peers.Add(preferredPeer);
         foreach (var id in OnlineIds())
@@ -530,6 +541,7 @@ public sealed class PeerNode : IDisposable
 
     public async Task<string?> SendFileAsync(string peerId, string path, string? transferId, string? roomId, string? authorId, string? authorName)
     {
+        if (!LicenseService.Usable) return LicenseService.LockedStatus;
         if (!File.Exists(path)) return "Dosya bulunamadı";
         var info = new FileInfo(path);
         if (info.Length > MaxFileBytes) return "Dosya 150 MB sınırını aşıyor";
@@ -573,6 +585,7 @@ public sealed class PeerNode : IDisposable
 
     public async Task<string?> SendPrintAsync(string peerId, string shareId, string path)
     {
+        if (!LicenseService.Usable) return LicenseService.LockedStatus;
         if (!File.Exists(path)) return "Dosya bulunamadı";
         var info = new FileInfo(path);
         if (info.Length <= 0) return "Dosya boş";
@@ -777,7 +790,7 @@ public sealed class PeerNode : IDisposable
         if (!_store.Allows(peerId))
         {
             LicenseService.NotifySeat();
-            return (null, LicenseService.SeatStatus);
+            return (null, LicenseService.StopText);
         }
         PeerState? peer;
         lock (_peerLock) _peers.TryGetValue(peerId, out peer);
@@ -977,10 +990,39 @@ public sealed class PeerNode : IDisposable
         }
     }
 
+    async Task RefuseLocked(Link link, JsonElement message, string kind)
+    {
+        var id = Str(message, "id");
+        var req = Str(message, "req");
+        var error = LicenseService.LockedStatus;
+        try
+        {
+            if (kind == "file-begin" && Str(message, "print").Length > 0)
+                await link.Send(Obj(("t", "print-result"), ("id", id), ("error", error)));
+            else if (kind is "file-begin" or "file-end")
+                await link.Send(Obj(("t", "file-error"), ("id", id), ("error", error)));
+            else if (kind == "room-get" && req.Length > 0)
+                await link.Send(Obj(("t", "room-miss"), ("req", req)));
+            else if (kind == "list" && req.Length > 0)
+                await link.Send(Obj(("t", "dir"), ("req", req), ("error", error)));
+            else if (req.Length > 0 && kind is "get-file" or "mkdir" or "delete" or "rename" or "copy" or "move" or "put-begin")
+                await link.Send(Obj(("t", "fs"), ("req", req), ("error", error)));
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+        }
+    }
+
     async Task Dispatch(Link link, JsonElement message)
     {
         var kind = Str(message, "t");
         var req = Str(message, "req");
+        if (!LicenseService.Usable && kind is "chat" or "seen" or "drop" or "room" or "room-get" or "list" or "get-file" or "mkdir" or "delete" or "rename" or "copy" or "move" or "put-begin" or "file-begin" or "file-chunk" or "file-end")
+        {
+            await RefuseLocked(link, message, kind);
+            return;
+        }
         if (kind == "print-result")
         {
             var printId = Str(message, "id");

@@ -10,7 +10,7 @@ static class ShareConnect
         if (!App.Me.Store.Allows(peer.Id))
         {
             LicenseService.NotifySeat();
-            return LicenseService.SeatStatus;
+            return LicenseService.StopText;
         }
 
         var label = "";
@@ -31,7 +31,7 @@ static class ShareConnect
         if (!App.Me.Store.Allows(peer.Id))
         {
             LicenseService.NotifySeat();
-            return LicenseService.SeatStatus;
+            return LicenseService.StopText;
         }
 
         var result = await LocalPrinters.EnsureAsync(peer.Id, peer.Name, share.Id, share.Name, peer.Online);

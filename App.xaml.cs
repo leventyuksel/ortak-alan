@@ -298,6 +298,11 @@ public partial class App : Application
 
     public string AddFolder(string path)
     {
+        if (!LicenseService.Usable)
+        {
+            LicenseService.NotifySeat();
+            return LicenseService.LockedStatus;
+        }
         path = Path.GetFullPath(path);
         if (Store.CopyShares().Any(s => s.Kind == "folder" && string.Equals(s.Path, path, StringComparison.OrdinalIgnoreCase)))
             return "Bu klasör zaten paylaşımda.";
@@ -312,6 +317,11 @@ public partial class App : Application
 
     public string AddPrinter(string printerName)
     {
+        if (!LicenseService.Usable)
+        {
+            LicenseService.NotifySeat();
+            return LicenseService.LockedStatus;
+        }
         if (Store.CopyShares().Any(s => s.Kind == "printer" && string.Equals(s.Path, printerName, StringComparison.OrdinalIgnoreCase)))
             return "Bu yazıcı zaten paylaşımda.";
         if (!PrinterRelay.Installed(printerName))

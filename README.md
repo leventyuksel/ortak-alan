@@ -74,7 +74,7 @@ Ayarlardan bilgisayar adı, Windows ile açılma ve hazır temalardan biri deği
 
 ### Lisans
 
-Program 30 günlük deneme ile açılır. Süre dolunca lisans önerilir; program çalışmayı sürdürür. Lisanssız en çok beş kullanıcı eklenir. Altıncı kullanıcı için lisans gerekir. Anahtar künyedeki kutuya yapıştırılıp kaydedilir. Anahtar bir bilgisayarda girilince aynı ağdaki diğer bilgisayarlar programı yeniden açtığında lisanslı olur. Program klasörü başka bilgisayara kopyalanırsa orada açılmaz.
+Program 7 gün ve 3 bilgisayarlık kullanımla açılır. Süre dolunca program açılır ve lisans ister. Anahtar girilmeden sohbet, dosya, ekran alıntısı ve yazıcı çalışmaz. Dördüncü bilgisayar için lisans gerekir. Anahtar künyedeki kutuya yapıştırılıp kaydedilir. Anahtar bir bilgisayarda girilince aynı ağdaki diğer bilgisayarlar programı yeniden açtığında lisanslı olur. Program klasörü başka bilgisayara kopyalanırsa orada açılmaz.
 
 ## Birlikte çalışması için
 

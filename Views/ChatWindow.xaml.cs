@@ -393,7 +393,7 @@ public partial class ChatWindow : ChromeWindow
         Bind(peer.Id, peer.Name);
         if (!App.Me.Store.Allows(peer.Id))
         {
-            StatusText.Text = LicenseService.SeatStatus;
+            StatusText.Text = LicenseService.StopText;
             LicenseService.NotifySeat();
             return;
         }
@@ -675,9 +675,15 @@ public partial class ChatWindow : ChromeWindow
         }
         var text = (preset ?? Input.Text).Trim();
         if (text.Length == 0) return;
+        if (!LicenseService.Usable)
+        {
+            StatusText.Text = LicenseService.LockedStatus;
+            LicenseService.NotifySeat();
+            return;
+        }
         if (SelectedId != RoomChat.Id && !App.Me.Store.Allows(SelectedId))
         {
-            StatusText.Text = LicenseService.SeatStatus;
+            StatusText.Text = LicenseService.StopText;
             LicenseService.NotifySeat();
             return;
         }
@@ -789,6 +795,12 @@ public partial class ChatWindow : ChromeWindow
 
     async void Screen_Click(object sender, RoutedEventArgs e)
     {
+        if (!LicenseService.Usable)
+        {
+            StatusText.Text = LicenseService.LockedStatus;
+            LicenseService.NotifySeat();
+            return;
+        }
         if (SelectedId == null)
         {
             MessageBox.Show(this, "Önce soldan Ortak konuşmayı veya bir kişiyi seçin.", "Ekran alıntısı");
@@ -885,9 +897,15 @@ public partial class ChatWindow : ChromeWindow
         }
         if (peerId != SelectedId)
             Bind(peerId, App.Me.Directory.Peers.FirstOrDefault(p => p.Id == peerId)?.Name ?? "Sohbet");
+        if (!LicenseService.Usable)
+        {
+            StatusText.Text = LicenseService.LockedStatus;
+            LicenseService.NotifySeat();
+            return;
+        }
         if (peerId != RoomChat.Id && !App.Me.Store.Allows(peerId))
         {
-            StatusText.Text = LicenseService.SeatStatus;
+            StatusText.Text = LicenseService.StopText;
             LicenseService.NotifySeat();
             return;
         }
