@@ -110,13 +110,35 @@
                     <ItemsControl ItemsSource="{Binding Shares}" Margin="16,4,0,0">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                          <Button Style="{StaticResource RowButton}" Click="RemoteShare_Click" HorizontalContentAlignment="Left">
-                            <StackPanel Orientation="Horizontal">
-                              <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                              <TextBlock Text="{Binding KindLabel}" Width="58" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
-                              <TextBlock Text="{Binding Name}" VerticalAlignment="Center" Foreground="{DynamicResource Ink}"/>
-                            </StackPanel>
-                          </Button>
+                          <Grid>
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="*"/>
+                              <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Style="{StaticResource RowButton}" Click="RemoteShare_Click" HorizontalContentAlignment="Left">
+                              <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding KindLabel}" Width="58" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" Foreground="{DynamicResource Ink}"/>
+                              </StackPanel>
+                            </Button>
+                            <Button Grid.Column="1" Content="Kaldır" Click="RemoveRemotePrinter_Click">
+                              <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
+                                  <Setter Property="Visibility" Value="Collapsed"/>
+                                  <Setter Property="Padding" Value="6,4"/>
+                                  <Setter Property="MinHeight" Value="28"/>
+                                  <Setter Property="Margin" Value="4,0,0,0"/>
+                                  <Setter Property="VerticalAlignment" Value="Center"/>
+                                  <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Connected}" Value="True">
+                                      <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                  </Style.Triggers>
+                                </Style>
+                              </Button.Style>
+                            </Button>
+                          </Grid>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>

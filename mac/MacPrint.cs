@@ -26,44 +26,84 @@ static class MacPrint
     {
         _node = node;
         Load();
+        Prune();
         foreach (var item in Snapshot())
             Listen(item);
         _ = Task.Run(Loop);
     }
 
+    public static bool Has(string peerId, string shareId)
+    {
+        QueueItem? item;
+        lock (Gate) item = _items.FirstOrDefault(q => q.Peer == peerId && q.Share == shareId);
+        if (item == null || item.Port == 0) return false;
+        return QueuesForUri("socket://127.0.0.1:" + item.Port).Count > 0;
+    }
+
     public static async Task<string> AddQueue(string peerId, string peerName, string shareId, string shareName)
     {
-        var queue = QueueName(peerName, shareName);
+        var wanted = QueueName(peerName, shareName);
         QueueItem item;
         lock (Gate)
         {
-            item = _items.FirstOrDefault(q => q.Peer == peerId && q.Share == shareId)
-                   ?? _items.FirstOrDefault(q => q.Queue == queue)
-                   ?? new QueueItem();
+            item = _items.FirstOrDefault(q => q.Peer == peerId && q.Share == shareId) ?? new QueueItem();
             if (item.Port == 0)
             {
                 item.Peer = peerId;
                 item.Share = shareId;
-                item.Queue = queue;
+                item.Queue = wanted;
                 item.Port = FreePort();
                 _items.Add(item);
-                Save();
-            }
-            else
-            {
-                item.Peer = peerId;
-                item.Share = shareId;
-                item.Queue = queue;
                 Save();
             }
         }
         Listen(item);
         var uri = "socket://127.0.0.1:" + item.Port;
-        if (QueueExists(queue, uri))
-            return "\"" + queue + "\" yazıcılar listesinde. Word, Safari ve diğer programlardan bu yazıcıyı seçebilirsiniz.";
+        var existing = QueuesForUri(uri);
+        if (existing.Count > 0)
+            return "\"" + existing[0] + "\" yazıcılar listesinde. Word, Safari ve diğer programlardan bu yazıcıyı seçebilirsiniz.";
 
-        var error = await Install(queue, uri);
-        return error ?? "\"" + queue + "\" yazıcılar listesine eklendi. Word, Safari ve diğer programlardan bu yazıcıyı seçebilirsiniz.";
+        var error = await Install(item.Queue, uri);
+        return error ?? "\"" + item.Queue + "\" yazıcılar listesine eklendi. Word, Safari ve diğer programlardan bu yazıcıyı seçebilirsiniz.";
+    }
+
+    public static async Task<string> RemoveQueue(string peerId, string shareId)
+    {
+        QueueItem? item;
+        lock (Gate) item = _items.FirstOrDefault(q => q.Peer == peerId && q.Share == shareId);
+        if (item == null) return "Bu yazıcı bağlı değil.";
+        var uri = "socket://127.0.0.1:" + item.Port;
+        var names = QueuesForUri(uri);
+        if (names.Count == 0)
+        {
+            lock (Gate)
+            {
+                _items.RemoveAll(q => q.Peer == peerId && q.Share == shareId);
+                Save();
+            }
+            return "\"" + item.Queue + "\" zaten yazıcılar listesinde yoktu.";
+        }
+        var error = await Uninstall(names);
+        if (error != null) return error;
+        lock (Gate)
+        {
+            _items.RemoveAll(q => q.Peer == peerId && q.Share == shareId);
+            Save();
+        }
+        return "\"" + item.Queue + "\" yazıcılar listesinden kaldırıldı.";
+    }
+
+    static void Prune()
+    {
+        var text = Run("lpstat", "-v");
+        lock (Gate)
+        {
+            var before = _items.Count;
+            _items.RemoveAll(item => item.Port == 0 || !text.Contains("socket://127.0.0.1:" + item.Port, StringComparison.Ordinal));
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            _items.RemoveAll(item => !seen.Add(item.Peer + "\n" + item.Share));
+            if (_items.Count != before) Save();
+        }
     }
 
     static int FreePort()
@@ -140,15 +180,30 @@ static class MacPrint
         }
     }
 
-    static bool QueueExists(string queue, string uri)
+    static List<string> QueuesForUri(string uri)
     {
-        var text = Run("lpstat", "-v");
-        foreach (var line in text.Split('\n'))
+        var names = new List<string>();
+        foreach (var line in Run("lpstat", "-v").Split('\n'))
         {
-            if (line.Contains(uri, StringComparison.Ordinal) && line.Contains(queue, StringComparison.Ordinal))
-                return true;
+            var marker = ": " + uri;
+            var at = line.IndexOf(marker, StringComparison.Ordinal);
+            const string prefix = "device for ";
+            if (at <= prefix.Length || !line.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            var name = line[prefix.Length..at].Trim();
+            if (name.Length > 0 && !names.Contains(name)) names.Add(name);
         }
-        return false;
+        return names;
+    }
+
+    static async Task<string?> Uninstall(IReadOnlyList<string> names)
+    {
+        if (names.Count == 0) return null;
+        var dir = "/tmp/ortakalan-kur";
+        Directory.CreateDirectory(dir);
+        var script = Path.Combine(dir, "kaldir.sh");
+        var body = "#!/bin/bash\nset -e\n" + string.Concat(names.Select(name => "lpadmin -x " + Quote(name) + "\n"));
+        File.WriteAllText(script, body, new UTF8Encoding(false));
+        return await Admin(script);
     }
 
     static async Task<string?> Install(string queue, string uri)
@@ -164,7 +219,11 @@ static class MacPrint
                    "cupsenable " + Quote(queue) + "\n" +
                    "cupsaccept " + Quote(queue) + "\n";
         File.WriteAllText(script, body, new UTF8Encoding(false));
+        return await Admin(script);
+    }
 
+    static async Task<string?> Admin(string script)
+    {
         var start = new System.Diagnostics.ProcessStartInfo("osascript")
         {
             UseShellExecute = false,
@@ -176,13 +235,13 @@ static class MacPrint
         try
         {
             using var process = System.Diagnostics.Process.Start(start);
-            if (process == null) return "Yazıcı eklenemedi.";
+            if (process == null) return "Yazıcı işlemi yapılamadı.";
             var error = await process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync();
             if (process.ExitCode == 0) return null;
             if (error.Contains("cancel", StringComparison.OrdinalIgnoreCase) || error.Contains("iptal", StringComparison.OrdinalIgnoreCase))
-                return "Yazıcı eklenmedi. macOS izin penceresinde onay gerekir.";
-            return error.Trim().Length == 0 ? "Yazıcı eklenemedi." : error.Trim();
+                return "İşlem yapılmadı. macOS izin penceresinde onay gerekir.";
+            return error.Trim().Length == 0 ? "Yazıcı işlemi yapılamadı." : error.Trim();
         }
         catch (Exception ex)
         {

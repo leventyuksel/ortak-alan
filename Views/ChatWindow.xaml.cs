@@ -428,6 +428,9 @@ public partial class ChatWindow : ChromeWindow
         var menu = new ContextMenu { PlacementTarget = item, Placement = PlacementMode.MousePoint };
         menu.Items.Add(ShareMenu("Paylaşılan klasöre bağlan", peer, "folder"));
         menu.Items.Add(ShareMenu("Paylaşılan yazıcıya bağlan", peer, "printer"));
+        var connected = peer.Shares.Where(share => share.Kind == "printer" && LocalPrinters.Has(peer.Id, share.Id)).ToList();
+        if (connected.Count > 0)
+            menu.Items.Add(RemovePrinterMenu(peer, connected));
         menu.Items.Add(new Separator());
         var remove = new MenuItem { Header = "Listeden kaldır" };
         remove.Click += (_, _) => App.Me.RemoveFromList(peer.Id, peer.Name);
@@ -458,6 +461,35 @@ public partial class ChatWindow : ChromeWindow
         return item;
     }
 
+    MenuItem RemovePrinterMenu(PeerVm peer, List<RemoteShareVm> connected)
+    {
+        var item = new MenuItem { Header = "Bağlı yazıcıyı kaldır" };
+        if (connected.Count == 1)
+        {
+            var only = connected[0];
+            item.Click += async (_, _) => await RemovePrinter(peer, only);
+        }
+        else
+        {
+            foreach (var share in connected)
+            {
+                var captured = share;
+                var child = new MenuItem { Header = share.Name };
+                child.Click += async (_, _) => await RemovePrinter(peer, captured);
+                item.Items.Add(child);
+            }
+        }
+        return item;
+    }
+
+    async Task RemovePrinter(PeerVm peer, RemoteShareVm share)
+    {
+        var answer = MessageBox.Show(this, "\"" + share.Name + "\" yazıcılar klasöründen kaldırılsın mı?", "Ortak Alan", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) return;
+        StatusText.Text = await LocalPrinters.RemoveAsync(peer.Id, share.Id);
+        share.Connected = LocalPrinters.Has(peer.Id, share.Id);
+    }
+
     async Task ConnectShare(PeerVm peer, RemoteShareVm share)
     {
         if (share.Kind == "folder")
@@ -473,6 +505,7 @@ public partial class ChatWindow : ChromeWindow
         {
             StatusText.Text = "Yazıcılar klasörüne ekleniyor…";
             var text = await ShareConnect.ConnectPrinter(peer, share, this);
+            share.Connected = LocalPrinters.Has(peer.Id, share.Id);
             if (text.Length > 0) StatusText.Text = text;
         }
     }

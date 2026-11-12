@@ -76,6 +76,7 @@ public partial class MainWindow : Window
         SendButton.IsEnabled = on;
         ShareButton.IsEnabled = on;
         PrinterButton.IsEnabled = on;
+        PrinterRemoveButton.IsEnabled = on;
         if (!on) StatusText.Text = "7 günlük kullanım süresi doldu. Lisans girilmeden sohbet, dosya, ekran alıntısı ve yazıcı çalışmaz.";
     }
 
@@ -258,8 +259,41 @@ public partial class MainWindow : Window
             if (pick.Index < 0) return;
             chosen = printers[pick.Index];
         }
+        if (MacPrint.Has(peer.Id, chosen.Id))
+        {
+            StatusText.Text = "\"" + chosen.Name + "\" zaten yazıcılar listesinde.";
+            return;
+        }
         StatusText.Text = "macOS yönetici şifresi isteyecek.";
         StatusText.Text = await MacPrint.AddQueue(peer.Id, peer.Name, chosen.Id, chosen.Name);
+    }
+
+    async void PrinterRemove_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_node == null || !_desk.Usable) return;
+        if (_chat == MacNode.RoomId)
+        {
+            StatusText.Text = "Önce listeden yazıcısı olan bilgisayarı seçin.";
+            return;
+        }
+        var peer = _node.Peers().FirstOrDefault(p => p.Id == _chat);
+        var printers = peer?.Shares.Where(s => s.Kind == "printer" && MacPrint.Has(peer.Id, s.Id)).ToList() ?? new List<RemoteShare>();
+        if (peer == null || printers.Count == 0)
+        {
+            StatusText.Text = "Bu bilgisayarın bağlı yazıcısı yok.";
+            return;
+        }
+        var chosen = printers[0];
+        if (printers.Count > 1)
+        {
+            var pick = new PickWindow(printers.Select(s => s.Name).ToList());
+            await pick.ShowDialog(this);
+            if (pick.Index < 0) return;
+            chosen = printers[pick.Index];
+        }
+        if (!await Confirm("\"" + chosen.Name + "\" yazıcılar listesinden kaldırılsın mı?")) return;
+        StatusText.Text = "macOS yönetici şifresi isteyecek.";
+        StatusText.Text = await MacPrint.RemoveQueue(peer.Id, chosen.Id);
     }
 
     async void Share_Click(object? sender, RoutedEventArgs e)
@@ -306,6 +340,7 @@ public partial class MainWindow : Window
         if (_node == null || People.SelectedItem is not Row row) return;
         _chat = row.Id;
         ShowChat();
+        PrinterRemoveButton.IsEnabled = _desk.Usable && row.Id != MacNode.RoomId;
         StatusText.Text = row.Id == MacNode.RoomId
             ? "Buraya yazılanı ağdaki herkes görür."
             : "";

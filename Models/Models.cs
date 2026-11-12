@@ -187,7 +187,7 @@ public sealed class PeerSnapshot
     public List<RemoteShare> Shares { get; set; } = new();
 }
 
-public sealed class RemoteShareVm
+public sealed class RemoteShareVm : Observable
 {
     public string PeerId { get; init; } = "";
     public string Id { get; init; } = "";
@@ -196,6 +196,8 @@ public sealed class RemoteShareVm
     public string? WindowsShare { get; init; }
     public string KindLabel { get; init; } = "";
     public string Glyph { get; init; } = "";
+    bool _connected;
+    public bool Connected { get => _connected; set => Set(ref _connected, value); }
 }
 
 public sealed class PeerVm : Observable
@@ -312,7 +314,8 @@ public sealed class PeerVm : Observable
                 Name = share.Name,
                 WindowsShare = share.WindowsShare,
                 KindLabel = share.Kind == "printer" ? "Yazıcı" : "Klasör",
-                Glyph = share.Kind == "printer" ? "\uE749" : "\uE8B7"
+                Glyph = share.Kind == "printer" ? "\uE749" : "\uE8B7",
+                Connected = share.Kind == "printer" && LocalPrinters.Has(snapshot.Id, share.Id)
             });
         }
         _sig = sig;

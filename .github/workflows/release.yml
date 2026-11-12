@@ -47,7 +47,9 @@ jobs:
 
             Mac için Apple Silicon arşivi OrtakAlan-osx-arm64.app.tar.gz, Intel Mac arşivi OrtakAlan-osx-x64.app.tar.gz dosyasıdır. Arşivi açın, uygulamaya sağ tıklayıp Aç deyin.
 
-            Sürüm 2.0.6. Program 7 gün ve 3 bilgisayarlık kullanımla açılır. Süre dolunca program açılır ve lisans ister; anahtar girilmeden sohbet, dosya, ekran alıntısı ve yazıcı çalışmaz.
+            Sürüm 2.0.7. Aynı paylaşılan yazıcı bir kez eklenir. Yazıcılar klasöründen silinen kuyruk program açılınca geri gelmez. Bağlı yazıcı programdan kaldırılınca yazıcılar klasöründen de silinir.
+
+            Program 7 gün ve 3 bilgisayarlık kullanımla açılır. Süre dolunca program açılır ve lisans ister; anahtar girilmeden sohbet, dosya, ekran alıntısı ve yazıcı çalışmaz.
 
             Aynı ağdaki bilgisayarlar birbirini izin sormadan ekler. Farklı ağdan gelen bağlantıda izin sorusu durur. Kurulum, programı Windows güvenlik duvarına ekler; izin penceresinde Evet'e basın. Anahtar bir bilgisayarda girilince aynı ağdaki diğer bilgisayarlar programı yeniden açtığında lisanslı olur. Program klasörü başka bilgisayara kopyalanırsa orada açılmaz.
 

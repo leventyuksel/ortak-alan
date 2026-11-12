@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>OrtakAlan.Mac</RootNamespace>
     <AssemblyName>OrtakAlan</AssemblyName>
-    <Version>2.0.6</Version>
+    <Version>2.0.7</Version>
     <Product>Ortak Alan</Product>
     <AssemblyTitle>Ortak Alan</AssemblyTitle>
     <Description>Klasör, yazıcı, mesaj ve dosya paylaşımı</Description>

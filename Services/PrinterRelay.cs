@@ -31,6 +31,21 @@ static class PrinterRelay
         return false;
     }
 
+    public static List<string> Names()
+    {
+        var names = new List<string>();
+        try
+        {
+            foreach (string name in PrinterSettings.InstalledPrinters)
+                names.Add(name);
+        }
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+        }
+        return names;
+    }
+
     public static async Task<string?> PrintAsync(string printerName, string path)
     {
         if (!File.Exists(path)) return "Dosya bulunamadı";

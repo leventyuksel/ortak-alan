@@ -9,9 +9,9 @@
   <key>CFBundleIdentifier</key>
   <string>com.lyazilim.ortakalan</string>
   <key>CFBundleVersion</key>
-  <string>2.0.6</string>
+  <string>2.0.7</string>
   <key>CFBundleShortVersionString</key>
-  <string>2.0.6</string>
+  <string>2.0.7</string>
   <key>CFBundleExecutable</key>
   <string>OrtakAlan</string>
   <key>CFBundlePackageType</key>

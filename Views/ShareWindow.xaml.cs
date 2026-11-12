@@ -128,7 +128,18 @@ public partial class ShareWindow : ChromeWindow
 
         StatusText.Text = "Yazıcılar klasörüne ekleniyor…";
         var text = await ShareConnect.ConnectPrinter(peer, share, this);
+        share.Connected = LocalPrinters.Has(peer.Id, share.Id);
         if (text.Length > 0) StatusText.Text = text;
+    }
+
+    async void RemoveRemotePrinter_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.DataContext is not RemoteShareVm share) return;
+        var answer = MessageBox.Show(this, "\"" + share.Name + "\" yazıcılar klasöründen kaldırılsın mı?", "Ortak Alan", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) return;
+        var text = await LocalPrinters.RemoveAsync(share.PeerId, share.Id);
+        share.Connected = LocalPrinters.Has(share.PeerId, share.Id);
+        StatusText.Text = text;
     }
 
     void Chat_Click(object sender, RoutedEventArgs e) => App.Me.ShowChat();

@@ -60,6 +60,50 @@ static class LocalPrinters
             return _links.Any(link => string.Equals(link.Queue, name, StringComparison.OrdinalIgnoreCase));
     }
 
+    public static bool Has(string peerId, string shareId)
+    {
+        lock (ListLock)
+        {
+            var link = _links.FirstOrDefault(item => item.PeerId == peerId && item.ShareId == shareId);
+            return link != null && PrinterRelay.Installed(link.Queue);
+        }
+    }
+
+    public static async Task<string> RemoveAsync(string peerId, string shareId)
+    {
+        await Gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            PrinterLink? link;
+            lock (ListLock)
+                link = _links.FirstOrDefault(item => item.PeerId == peerId && item.ShareId == shareId);
+            if (link == null) return "Bu yazıcı bağlı değil.";
+            var canonical = BaseName(link.Queue);
+            List<PrinterLink> extras;
+            lock (ListLock)
+                extras = _links.Where(item => item.PeerId == peerId && string.Equals(BaseName(item.Queue), canonical, StringComparison.OrdinalIgnoreCase)).ToList();
+            foreach (var item in extras)
+            {
+                if (PrinterRelay.Installed(item.Queue) && !Spool.RemoveQueue(item.Queue) && PrinterRelay.Installed(item.Queue))
+                    return "\"" + item.Queue + "\" yazıcılar klasöründen kaldırılamadı.";
+                TryDeleteFile(item.PortFile);
+                lock (ListLock) _links.Remove(item);
+            }
+            foreach (var name in PrinterRelay.Names())
+            {
+                if (!string.Equals(BaseName(name), canonical, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!Ours(name)) continue;
+                if (PrinterRelay.Installed(name)) Spool.RemoveQueue(name);
+            }
+            Save();
+            return "\"" + canonical + "\" yazıcılar klasöründen kaldırıldı.";
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
     public static async Task<QueueResult> EnsureAsync(string peerId, string peerName, string shareId, string shareName, bool online)
     {
         if (peerId.Length == 0 || shareId.Length == 0)
@@ -80,20 +124,25 @@ static class LocalPrinters
         if (_dataDir.Length == 0)
             return new QueueResult(false, false, "Yazıcı kuyruğu henüz hazır değil.");
 
+        var canonical = Canonical(peerName, shareName);
         PrinterLink link;
         var createdLink = false;
         lock (ListLock)
         {
-            link = _links.FirstOrDefault(item => item.PeerId == peerId && item.ShareId == shareId) ?? new PrinterLink();
+            link = _links.FirstOrDefault(item => item.PeerId == peerId && item.ShareId == shareId)
+                ?? _links.FirstOrDefault(item => item.PeerId == peerId && string.Equals(BaseName(item.Queue), canonical, StringComparison.OrdinalIgnoreCase))
+                ?? new PrinterLink();
             if (link.PeerId.Length == 0)
             {
                 link.PeerId = peerId;
                 link.ShareId = shareId;
-                link.Queue = QueueName(peerName, shareName);
+                link.Queue = PickName(canonical);
                 link.PortFile = Path.Combine(PortDir(), Safe(peerId) + "_" + Safe(shareId) + ".pdf");
                 createdLink = true;
                 _links.Add(link);
             }
+            link.PeerId = peerId;
+            link.ShareId = shareId;
             if (link.PortFile.Length == 0)
                 link.PortFile = Path.Combine(PortDir(), Safe(peerId) + "_" + Safe(shareId) + ".pdf");
             link.PeerName = Clean(peerName);
@@ -129,10 +178,7 @@ static class LocalPrinters
         try
         {
             await Gate.WaitAsync().ConfigureAwait(false);
-            List<PrinterLink> links;
-            lock (ListLock) links = _links.ToList();
-            foreach (var link in links)
-                Ensure(link.PeerId, link.PeerName.Length == 0 ? "Bilgisayar" : link.PeerName, link.ShareId, link.ShareName, false);
+            Prune();
         }
         catch (Exception ex)
         {
@@ -142,6 +188,41 @@ static class LocalPrinters
         {
             Gate.Release();
         }
+    }
+
+    static void Prune()
+    {
+        List<PrinterLink> links;
+        lock (ListLock) links = _links.ToList();
+        foreach (var link in links)
+        {
+            if (!PrinterRelay.Installed(link.Queue))
+                lock (ListLock) _links.Remove(link);
+        }
+        lock (ListLock) links = _links.ToList();
+        foreach (var group in links.GroupBy(link => link.PeerId + "\n" + BaseName(link.Queue), StringComparer.OrdinalIgnoreCase))
+        {
+            var keep = group.OrderBy(link => SuffixNumber(link.Queue)).ThenBy(link => link.Queue.Length).First();
+            foreach (var extra in group)
+            {
+                if (ReferenceEquals(extra, keep)) continue;
+                if (PrinterRelay.Installed(extra.Queue) && Ours(extra.Queue))
+                    Spool.RemoveQueue(extra.Queue);
+                lock (ListLock) _links.Remove(extra);
+            }
+        }
+        List<string> bases;
+        lock (ListLock) bases = _links.Select(link => BaseName(link.Queue)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var name in PrinterRelay.Names())
+        {
+            if (SuffixNumber(name) == 0) continue;
+            if (!bases.Contains(BaseName(name), StringComparer.OrdinalIgnoreCase)) continue;
+            if (!Ours(name)) continue;
+            bool kept;
+            lock (ListLock) kept = _links.Any(link => string.Equals(link.Queue, name, StringComparison.OrdinalIgnoreCase));
+            if (!kept) Spool.RemoveQueue(name);
+        }
+        Save();
     }
 
     static async Task Loop(CancellationToken token)
@@ -311,28 +392,58 @@ static class LocalPrinters
         }
     }
 
-    static string QueueName(string peerName, string shareName)
+    static string Canonical(string peerName, string shareName)
     {
         var left = Clean(peerName);
         var right = Clean(shareName);
         var name = left.Length == 0 ? right : right.Length == 0 ? left : left + " - " + right;
         if (name.Length == 0) name = "Ortak Alan";
         if (name.Length > 110) name = name[..110].Trim();
-        var unique = name;
+        return name;
+    }
+
+    static string PickName(string canonical)
+    {
+        if (!PrinterRelay.Installed(canonical) || Ours(canonical)) return canonical;
         for (var n = 2; n < 40; n++)
         {
-            var taken = PrinterRelay.Installed(unique);
-            if (!taken)
-            {
-                lock (ListLock)
-                    taken = _links.Any(link => string.Equals(link.Queue, unique, StringComparison.OrdinalIgnoreCase));
-            }
-            if (!taken) return unique;
             var suffix = " (" + n + ")";
-            var stem = name.Length + suffix.Length > 110 ? name[..(110 - suffix.Length)].Trim() : name;
-            unique = stem + suffix;
+            var stem = canonical.Length + suffix.Length > 110 ? canonical[..(110 - suffix.Length)].Trim() : canonical;
+            var candidate = stem + suffix;
+            if (!PrinterRelay.Installed(candidate) || Ours(candidate)) return candidate;
         }
-        return unique;
+        return canonical;
+    }
+
+    static string BaseName(string queue)
+    {
+        var open = queue.LastIndexOf(" (", StringComparison.Ordinal);
+        if (open < 1 || !queue.EndsWith(')')) return queue;
+        var number = queue[(open + 2)..^1];
+        return number.Length > 0 && number.All(char.IsDigit) ? queue[..open] : queue;
+    }
+
+    static int SuffixNumber(string queue)
+    {
+        var open = queue.LastIndexOf(" (", StringComparison.Ordinal);
+        if (open < 1 || !queue.EndsWith(')')) return 0;
+        var number = queue[(open + 2)..^1];
+        return int.TryParse(number, out var value) ? value : 0;
+    }
+
+    static bool Ours(string queue)
+    {
+        if (_dataDir.Length == 0) return false;
+        var port = PortOf(queue);
+        if (port.Length == 0) return false;
+        var root = Path.GetFullPath(PortDir());
+        var full = Path.GetFullPath(port);
+        return full.StartsWith(root, StringComparison.OrdinalIgnoreCase);
+    }
+
+    static void TryDeleteFile(string path)
+    {
+        try { if (path.Length > 0 && File.Exists(path)) File.Delete(path); } catch { /* dosya açık olabilir */ }
     }
 
     static string Describe(string queue, bool created, bool online)
@@ -597,6 +708,7 @@ static class LocalPrinters
 
         public static bool RemoveQueue(string name)
         {
+            if (!PrinterRelay.Installed(name)) return true;
             var defaults = new PrinterDefaults { Access = 4 };
             if (!OpenPrinterWith(name, out var handle, ref defaults))
             {

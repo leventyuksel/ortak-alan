@@ -8,7 +8,7 @@
         WindowStartupLocation="CenterScreen">
   <DockPanel>
     <Border DockPanel.Dock="Top" Background="#0E1A2B" Padding="14,8">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
         <Border Width="36" Height="36" CornerRadius="18" Background="White" ClipToBounds="True">
           <Image Source="avares://OrtakAlan/Assets/logo.png" Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
@@ -17,8 +17,9 @@
           <TextBlock x:Name="LicenseText" Foreground="#9FB0C3" FontSize="12"/>
         </StackPanel>
         <Button x:Name="PrinterButton" Grid.Column="2" Content="Yazıcıyı ekle" Margin="0,0,8,0" Click="Printer_Click" Background="#0F766E" Foreground="White"/>
-        <Button Grid.Column="3" Content="Lisans" Margin="0,0,8,0" Click="License_Click" Background="#16324A" Foreground="White"/>
-        <Button x:Name="ShareButton" Grid.Column="4" Content="Paylaş" Click="Share_Click" Background="#16324A" Foreground="White"/>
+        <Button x:Name="PrinterRemoveButton" Grid.Column="3" Content="Yazıcıyı kaldır" Margin="0,0,8,0" Click="PrinterRemove_Click" Background="#16324A" Foreground="White"/>
+        <Button Grid.Column="4" Content="Lisans" Margin="0,0,8,0" Click="License_Click" Background="#16324A" Foreground="White"/>
+        <Button x:Name="ShareButton" Grid.Column="5" Content="Paylaş" Click="Share_Click" Background="#16324A" Foreground="White"/>
       </Grid>
     </Border>
 
