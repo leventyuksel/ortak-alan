@@ -64,7 +64,7 @@ static class PrinterRelay
                 error = await Sta(() => PrintXps(printerName, path));
             else error = await Sta(() => PrintWithShell(printerName, path));
             if (error != null) return error;
-            await Task.Delay(800);
+            await Task.Delay(200);
             return PrinterFault.Describe(printerName, before);
         }
         catch (Exception ex)
@@ -80,38 +80,90 @@ static class PrinterRelay
         using var input = file.AsRandomAccessStream();
         var pdf = await Windows.Data.Pdf.PdfDocument.LoadFromStreamAsync(input);
         if (pdf.PageCount == 0) return "Dosya boş";
+        var count = (int)pdf.PageCount;
         var job = Path.GetFileName(path);
-        for (uint i = 0; i < pdf.PageCount; i++)
+        using var doc = new PrintDocument();
+        if (!Prepare(doc, printer, job.Length == 0 ? "Ortak Alan" : job)) return "Yazıcı kullanılamıyor";
+        var index = 0;
+        Bitmap? current = null;
+        string? failed = null;
+        doc.QueryPageSettings += (_, e) =>
         {
-            using var page = pdf.GetPage(i);
-            var width = page.Size.Width * 300 / 96;
-            var height = page.Size.Height * 300 / 96;
-            const double max = 4960;
-            if (width > max || height > max)
+            try
             {
-                var fit = Math.Min(max / Math.Max(width, 1), max / Math.Max(height, 1));
-                width *= fit;
-                height *= fit;
+                current?.Dispose();
+                current = RenderPage(pdf, (uint)index);
+                e.PageSettings.Landscape = current.Width > current.Height;
             }
-            var options = new Windows.Data.Pdf.PdfPageRenderOptions
+            catch (Exception ex)
             {
-                DestinationWidth = (uint)Math.Max(1, Math.Round(width)),
-                DestinationHeight = (uint)Math.Max(1, Math.Round(height))
-            };
-            using var ras = new Windows.Storage.Streams.InMemoryRandomAccessStream();
-            await page.RenderToStreamAsync(ras, options);
-            ras.Seek(0);
-            using var net = ras.AsStreamForRead();
-            using var copy = new MemoryStream();
-            net.CopyTo(copy);
-            copy.Position = 0;
-            using var raw = new Bitmap(copy);
-            using var bitmap = new Bitmap(raw);
-            var name = pdf.PageCount == 1 ? job : job + " (" + (i + 1) + ")";
-            var error = PrintOne(printer, name, bitmap, true);
-            if (error != null) return error;
+                Log.Write(ex);
+                failed = "Yazdırılamadı";
+                e.Cancel = true;
+            }
+        };
+        doc.PrintPage += (_, e) =>
+        {
+            if (e.Graphics == null || current == null || failed != null)
+            {
+                e.HasMorePages = false;
+                return;
+            }
+            var bounds = e.PageBounds;
+            e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Bilinear;
+            e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighSpeed;
+            e.Graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighSpeed;
+            e.Graphics.DrawImage(current, bounds);
+            index++;
+            e.HasMorePages = failed == null && index < count;
+        };
+        try
+        {
+            doc.Print();
         }
-        return null;
+        catch (Exception ex)
+        {
+            Log.Write(ex);
+            failed ??= "Yazdırılamadı";
+        }
+        finally
+        {
+            current?.Dispose();
+        }
+        return failed;
+    }
+
+    const double RenderDpi = 240;
+
+    static Bitmap RenderPage(Windows.Data.Pdf.PdfDocument pdf, uint index)
+    {
+        using var page = pdf.GetPage(index);
+        var width = page.Size.Width * RenderDpi / 96;
+        var height = page.Size.Height * RenderDpi / 96;
+        const double max = 4096;
+        if (width > max || height > max)
+        {
+            var fit = Math.Min(max / Math.Max(width, 1), max / Math.Max(height, 1));
+            width *= fit;
+            height *= fit;
+        }
+        var options = new Windows.Data.Pdf.PdfPageRenderOptions
+        {
+            DestinationWidth = (uint)Math.Max(1, Math.Round(width)),
+            DestinationHeight = (uint)Math.Max(1, Math.Round(height)),
+            BitmapEncoderId = Windows.Graphics.Imaging.BitmapEncoder.BmpEncoderId
+        };
+        using var ras = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+        page.RenderToStreamAsync(ras, options).AsTask().ConfigureAwait(false).GetAwaiter().GetResult();
+        ras.Seek(0);
+        using var net = ras.AsStreamForRead();
+        using var copy = new MemoryStream();
+        net.CopyTo(copy);
+        copy.Position = 0;
+        using var raw = new Bitmap(copy);
+        var bitmap = new Bitmap(raw);
+        bitmap.SetResolution((float)RenderDpi, (float)RenderDpi);
+        return bitmap;
     }
 
     static string? PrintXps(string printer, string path)
@@ -210,6 +262,7 @@ static class PrinterRelay
 
     static bool Prepare(PrintDocument doc, string printer, string job)
     {
+        doc.PrintController = new StandardPrintController();
         doc.PrinterSettings.PrinterName = printer;
         doc.DocumentName = job.Length == 0 ? "Ortak Alan" : job;
         return doc.PrinterSettings.IsValid;

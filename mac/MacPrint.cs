@@ -13,7 +13,6 @@ static class MacPrint
     static readonly object Gate = new();
     static MacNode? _node;
     static List<QueueItem> _items = new();
-    static readonly Dictionary<string, (long Length, DateTime At)> Stable = new(StringComparer.Ordinal);
     static readonly HashSet<string> Told = new(StringComparer.Ordinal);
     static readonly HashSet<int> Listening = new();
 
@@ -149,26 +148,30 @@ static class MacPrint
     static void Capture(TcpClient client, QueueItem item)
     {
         var folder = Path.Combine(Spool, item.Peer + "_" + item.Share);
-        var path = Path.Combine(folder, DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + ".bin");
+        var path = Path.Combine(folder, DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + ".part");
+        var done = Path.Combine(folder, Path.GetFileNameWithoutExtension(path) + ".bin");
         try
         {
             Directory.CreateDirectory(folder);
-            using var stream = client.GetStream();
-            using var file = File.Create(path);
-            var buffer = new byte[65536];
-            long total = 0;
-            int read;
-            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+            using (var stream = client.GetStream())
+            using (var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 65536))
             {
-                total += read;
-                if (total > 150L * 1024 * 1024)
+                var buffer = new byte[65536];
+                long total = 0;
+                int read;
+                while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
                 {
-                    file.Dispose();
-                    TryDelete(path);
-                    return;
+                    total += read;
+                    if (total > 150L * 1024 * 1024)
+                    {
+                        file.Dispose();
+                        TryDelete(path);
+                        return;
+                    }
+                    file.Write(buffer, 0, read);
                 }
-                file.Write(buffer, 0, read);
             }
+            File.Move(path, done);
         }
         catch
         {
@@ -251,18 +254,23 @@ static class MacPrint
 
     static async Task Loop()
     {
+        var synced = DateTime.MinValue;
         while (true)
         {
             try
             {
-                Desk.Current.SyncPrinters();
+                if (DateTime.UtcNow - synced >= TimeSpan.FromSeconds(5))
+                {
+                    Desk.Current.SyncPrinters();
+                    synced = DateTime.UtcNow;
+                }
                 await Pump();
             }
             catch
             {
                 /* sonraki tur */
             }
-            await Task.Delay(1000);
+            await Task.Delay(200);
         }
     }
 
@@ -277,7 +285,7 @@ static class MacPrint
             if (split <= 0 || split >= name.Length - 1) continue;
             var peer = name[..split];
             var share = name[(split + 1)..];
-            foreach (var file in Directory.EnumerateFiles(folder))
+            foreach (var file in Directory.EnumerateFiles(folder, "*.bin"))
             {
                 if (!Ready(file)) continue;
                 var pdf = EnsurePdf(file);
@@ -305,14 +313,26 @@ static class MacPrint
 
     static bool Ready(string path)
     {
-        var info = new FileInfo(path);
-        if (info.Length < 8 || info.Length > 150L * 1024 * 1024) return false;
-        if (!Stable.TryGetValue(path, out var mark) || mark.Length != info.Length)
+        try
         {
-            Stable[path] = (info.Length, DateTime.UtcNow);
+            var info = new FileInfo(path);
+            if (info.Length < 8 || info.Length > 150L * 1024 * 1024) return false;
+            var head = new byte[4];
+            using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (stream.Read(head, 0, 4) < 4) return false;
+            var pdf = head[0] == (byte)'%' && head[1] == (byte)'P' && head[2] == (byte)'D' && head[3] == (byte)'F';
+            var ps = head[0] == (byte)'%' && head[1] == (byte)'!';
+            if (!pdf && !ps) return false;
+            var tailLen = (int)Math.Min(8192, stream.Length);
+            var tail = new byte[tailLen];
+            stream.Position = stream.Length - tailLen;
+            if (stream.Read(tail, 0, tailLen) < tailLen) return false;
+            return Encoding.ASCII.GetString(tail).Contains("%%EOF", StringComparison.Ordinal);
+        }
+        catch
+        {
             return false;
         }
-        return DateTime.UtcNow - mark.At >= TimeSpan.FromMilliseconds(700);
     }
 
     static string? EnsurePdf(string path)

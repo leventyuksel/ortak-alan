@@ -7,4 +7,12 @@ alwaysApply: true
 
 Ortak Alan’da yapılan her davranış değişikliği hem Windows (`OrtakAlan.csproj`) hem de macOS (`mac/`) tarafında aynı şekilde uygulanır.
 
-Yayın istendiğinde sürüm numarası iki projede de aynıdır. GitHub yayını Windows kurulumunu ve iki macOS arşivini birlikte içerir: `OrtakAlan-osx-arm64.app.tar.gz` ve `OrtakAlan-osx-x64.app.tar.gz`. Yalnız bir platformun paketini yayınlama.
+Yayın istendiğinde sürüm numarası iki projede de aynıdır. Kurulum önce çalışma klasöründeki `Versiyon\<sürüm>\` altına konur ve onay beklenir. Bu klasör yerelde kalır, git’e eklenmez.
+
+Klasörde şunlar durur:
+
+- `OrtakAlan-Setup-<sürüm>.exe`
+- `OrtakAlan-osx-arm64.app.tar.gz`
+- `OrtakAlan-osx-x64.app.tar.gz`
+
+Kullanıcı bu kurulumu onaylamadan commit, etiket ve GitHub yayını yapılmaz. Onaydan sonra GitHub yayını Windows kurulumunu ve iki macOS arşivini birlikte içerir. Yalnız bir platformun paketini yayınlama.

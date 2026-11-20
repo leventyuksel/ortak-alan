@@ -180,8 +180,8 @@ sealed class MacNode : IDisposable
         var wait = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
         link.Pending[id] = wait;
         await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", Path.GetFileName(path)), ("size", info.Length), ("print", shareId)));
-        await using var stream = File.OpenRead(path);
-        await SendBody(link, id, stream);
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 512 * 1024, FileOptions.SequentialScan);
+        await SendBody(link, id, stream, 512 * 1024);
         await link.Send(Obj(("t", "file-end"), ("id", id)));
         var done = await Task.WhenAny(wait.Task, Task.Delay(TimeSpan.FromMinutes(3), _cts.Token));
         if (done != wait.Task) return "Yazıcı yanıt vermedi";
@@ -201,17 +201,13 @@ sealed class MacNode : IDisposable
         await link.Send(Obj(("t", "file-end"), ("id", id)));
     }
 
-    static async Task SendBody(Link link, string id, Stream stream)
+    static async Task SendBody(Link link, string id, Stream stream, int chunk = 48 * 1024)
     {
-        var buffer = new byte[48 * 1024];
+        var buffer = new byte[chunk];
         var index = 0;
         int read;
         while ((read = await stream.ReadAsync(buffer)) > 0)
-        {
-            var slice = new byte[read];
-            Buffer.BlockCopy(buffer, 0, slice, 0, read);
-            await link.Send(Obj(("t", "file-chunk"), ("id", id), ("i", index++), ("data", Convert.ToBase64String(slice))));
-        }
+            await link.Send(Obj(("t", "file-chunk"), ("id", id), ("i", index++), ("data", Convert.ToBase64String(buffer, 0, read))));
     }
 
     async Task AcceptLoop()

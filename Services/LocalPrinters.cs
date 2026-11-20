@@ -227,7 +227,7 @@ static class LocalPrinters
 
     static async Task Loop(CancellationToken token)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(200));
         try
         {
             while (await timer.WaitForNextTickAsync(token).ConfigureAwait(false))
@@ -271,13 +271,14 @@ static class LocalPrinters
             Stable.Remove(path);
             return;
         }
+        if (!Closed(path)) return;
 
         if (!Stable.TryGetValue(path, out var mark) || mark.Length != info.Length)
         {
             Stable[path] = (info.Length, DateTime.UtcNow);
             return;
         }
-        if (DateTime.UtcNow - mark.At < TimeSpan.FromMilliseconds(700)) return;
+        if (DateTime.UtcNow - mark.At < TimeSpan.FromMilliseconds(200)) return;
 
         var stamp = info.Length + info.LastWriteTimeUtc.Ticks;
         if (Seen.TryGetValue(path, out var seen) && seen == stamp) return;
@@ -307,6 +308,23 @@ static class LocalPrinters
         if (!_online.Contains(link.PeerId))
             Tell(Label(link), "Yazdırma işi bekliyor. Karşı bilgisayar açılınca gider.", true);
         _ = Pump();
+    }
+
+    static bool Closed(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return stream.Length >= 8;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     static bool CopyPdf(string source, string dest)

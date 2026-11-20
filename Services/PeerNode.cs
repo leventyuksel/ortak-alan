@@ -600,16 +600,12 @@ public sealed class PeerNode : IDisposable
         {
             var name = Path.GetFileName(path);
             await link.Send(Obj(("t", "file-begin"), ("id", id), ("name", name), ("size", info.Length), ("print", shareId)));
-            await using var stream = File.OpenRead(path);
-            var buffer = new byte[64 * 1024];
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 512 * 1024, FileOptions.SequentialScan);
+            var buffer = new byte[512 * 1024];
             var index = 0;
             int read;
             while ((read = await stream.ReadAsync(buffer, _cts.Token)) > 0)
-            {
-                var slice = new byte[read];
-                Buffer.BlockCopy(buffer, 0, slice, 0, read);
-                await link.Send(Obj(("t", "file-chunk"), ("id", id), ("i", index++), ("data", Convert.ToBase64String(slice))));
-            }
+                await link.Send(Obj(("t", "file-chunk"), ("id", id), ("i", index++), ("data", Convert.ToBase64String(buffer, 0, read))));
             await link.Send(Obj(("t", "file-end"), ("id", id)));
             var finished = await Task.WhenAny(waiter.Task, Task.Delay(TimeSpan.FromMinutes(3), _cts.Token));
             if (finished != waiter.Task)

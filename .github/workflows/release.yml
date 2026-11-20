@@ -47,7 +47,9 @@ jobs:
 
             Mac için Apple Silicon arşivi OrtakAlan-osx-arm64.app.tar.gz, Intel Mac arşivi OrtakAlan-osx-x64.app.tar.gz dosyasıdır. Arşivi açın, uygulamaya sağ tıklayıp Aç deyin.
 
-            Sürüm 2.0.7. Aynı paylaşılan yazıcı bir kez eklenir. Yazıcılar klasöründen silinen kuyruk program açılınca geri gelmez. Bağlı yazıcı programdan kaldırılınca yazıcılar klasöründen de silinir.
+            Sürüm 2.0.8. Paylaşılan yazıcıya giden iş daha çabuk yola çıkar ve karşı bilgisayarda tek yazdırma işi olarak basılır.
+
+            Aynı paylaşılan yazıcı bir kez eklenir. Yazıcılar klasöründen silinen kuyruk program açılınca geri gelmez. Bağlı yazıcı programdan kaldırılınca yazıcılar klasöründen de silinir.
 
             Program 7 gün ve 3 bilgisayarlık kullanımla açılır. Süre dolunca program açılır ve lisans ister; anahtar girilmeden sohbet, dosya, ekran alıntısı ve yazıcı çalışmaz.
 
